@@ -1,9 +1,6 @@
 import React, { useEffect } from 'react';
 import { View, StyleSheet, Image, Dimensions, Text } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
-import { router } from 'expo-router';
-import firebaseAuthService from '@/services/firebaseAuth';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width, height } = Dimensions.get('window');
 
@@ -16,38 +13,18 @@ export default function SplashScreenComponent({ onFinish }: SplashScreenProps) {
     // Giữ splash screen hiển thị trong khi app đang load
     SplashScreen.preventAutoHideAsync();
 
-    const checkAuthAndNavigate = async () => {
+    const hideSplash = async () => {
       try {
         // Simulate loading time
         await new Promise(resolve => setTimeout(resolve, 2000));
-
         SplashScreen.hideAsync();
-
-        // Kiểm tra trạng thái đăng nhập bằng AsyncStorage (đáng tin cậy hơn)
-        const accessToken = await AsyncStorage.getItem('accessToken');
-        const refreshToken = await AsyncStorage.getItem('refreshToken');
-        const isLoggedIn = !!(accessToken && refreshToken);
-
-        if (isLoggedIn) {
-          // Nếu đã đăng nhập, chuyển đến trang home
-          console.log('User is logged in, navigating to home');
-          onFinish?.('(tabs)');
-        } else {
-          // Nếu chưa đăng nhập, chuyển đến trang login
-          console.log('User not logged in, navigating to login');
-          onFinish?.('login');
-        }
       } catch (error) {
-        console.error('Error checking auth:', error);
-        // Nếu có lỗi, chuyển đến trang login
-        SplashScreen.hideAsync();
-        console.log('Error occurred, navigating to login');
-        onFinish?.('login');
+        console.error('Error hiding splash screen:', error);
       }
     };
 
-    checkAuthAndNavigate();
-  }, []); // Bỏ onFinish khỏi dependency array
+    hideSplash();
+  }, []);
 
   return (
     <View style={styles.container}>

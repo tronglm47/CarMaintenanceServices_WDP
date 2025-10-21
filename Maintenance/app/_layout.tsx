@@ -14,7 +14,7 @@ Firebase.app();
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import SplashScreenComponent from '@/components/SplashScreen';
-import { AuthProvider } from '@/contexts/AuthContext';
+import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -29,28 +29,32 @@ export default function RootLayout() {
     </AuthProvider>
   );
 }
+
 function AppNavigator({ colorScheme }: { colorScheme: ColorSchemeName }) {
-  const [isLoading, setIsLoading] = useState(true);
+  const { isLoading: authLoading, isAuthenticated } = useAuth();
+  const [hasInitialized, setHasInitialized] = useState(false);
 
+  useEffect(() => {
+    // Only navigate once when auth loading is complete
+    if (!authLoading && !hasInitialized) {
+      setHasInitialized(true);
+      console.log('✅ Auth loading completed');
+      console.log('🔐 User authenticated:', isAuthenticated);
+      console.log('📍 Navigating to:', isAuthenticated ? '(tabs)' : 'login');
+    }
+  }, [authLoading, hasInitialized, isAuthenticated]);
 
-  const handleSplashFinish = (route: string) => {
-    console.log('Splash finished, navigating to:', route);
-    setIsLoading(false);
-    // Navigate after the splash screen state is updated
-    // Use a small delay to ensure the Stack is rendered first
-    setTimeout(() => {
-      router.replace(route as any);
-    }, 0);
-  };
-
-  if (isLoading) {
-    console.log('Showing splash screen');
-    return <SplashScreenComponent onFinish={handleSplashFinish} />;
+  // Show splash screen while auth is loading
+  if (authLoading) {
+    console.log('⏳ Auth is loading, showing splash screen...');
+    return <SplashScreenComponent />;
   }
+
+  console.log('🎯 Rendering main navigation. isAuthenticated:', isAuthenticated);
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
+      <Stack initialRouteName={isAuthenticated ? '(tabs)' : 'login'}>
         <Stack.Screen name="test" options={{ headerShown: false }} />
         <Stack.Screen name="test-auth" options={{ headerShown: false }} />
         <Stack.Screen name="auth-debug" options={{ headerShown: false }} />

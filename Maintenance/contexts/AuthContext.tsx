@@ -44,29 +44,38 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     useEffect(() => {
         const initializeAuth = async () => {
             try {
+                console.log('🔄 Initializing auth from AsyncStorage...');
                 // Load stored tokens
                 const storedAccessToken = await AsyncStorage.getItem('accessToken');
                 const storedRefreshToken = await AsyncStorage.getItem('refreshToken');
                 const storedUserRole = await AsyncStorage.getItem('userRole');
 
                 if (storedAccessToken && storedRefreshToken) {
+                    console.log('✅ Tokens found! User is logged in');
                     setAccessToken(storedAccessToken);
                     setRefreshToken(storedRefreshToken);
                     setUserRole(storedUserRole);
                     setIsAuthenticated(true);
+                } else {
+                    console.log('❌ No tokens found. User is NOT logged in');
+                    setIsAuthenticated(false);
                 }
             } catch (error) {
                 console.error('Error loading auth state:', error);
+                setIsAuthenticated(false);
             } finally {
+                console.log('✅ Auth initialization complete');
                 setIsLoading(false);
             }
         };
 
         // Listen to Firebase auth state changes
         const unsubscribe = auth().onAuthStateChanged((firebaseUser: FirebaseAuthTypes.User | null) => {
+            console.log('🔥 Firebase auth state changed. User:', firebaseUser?.email || 'none');
             setUser(firebaseUser);
             if (!firebaseUser) {
                 // Firebase user signed out, clear local auth state
+                console.log('🚪 Firebase user signed out, clearing auth state');
                 setIsAuthenticated(false);
                 setAccessToken(null);
                 setRefreshToken(null);
