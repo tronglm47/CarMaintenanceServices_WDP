@@ -3,9 +3,10 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ColorSchemeName } from 'react-native';
 import Toast from 'react-native-toast-message';
+import { router } from 'expo-router';
 
 // Initialize Firebase before anything else
 import Firebase from '@react-native-firebase/app';
@@ -30,13 +31,16 @@ export default function RootLayout() {
 }
 function AppNavigator({ colorScheme }: { colorScheme: ColorSchemeName }) {
   const [isLoading, setIsLoading] = useState(true);
-  const [initialRoute, setInitialRoute] = useState<string | null>(null);
 
 
   const handleSplashFinish = (route: string) => {
     console.log('Splash finished, navigating to:', route);
-    setInitialRoute(route);
     setIsLoading(false);
+    // Navigate after the splash screen state is updated
+    // Use a small delay to ensure the Stack is rendered first
+    setTimeout(() => {
+      router.replace(route as any);
+    }, 0);
   };
 
   if (isLoading) {
@@ -44,10 +48,9 @@ function AppNavigator({ colorScheme }: { colorScheme: ColorSchemeName }) {
     return <SplashScreenComponent onFinish={handleSplashFinish} />;
   }
 
-  console.log('Showing main app with initial route:', initialRoute);
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack initialRouteName={initialRoute || 'login'}>
+      <Stack>
         <Stack.Screen name="test" options={{ headerShown: false }} />
         <Stack.Screen name="test-auth" options={{ headerShown: false }} />
         <Stack.Screen name="auth-debug" options={{ headerShown: false }} />
