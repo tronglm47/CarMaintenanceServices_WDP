@@ -9,8 +9,6 @@ import {
   ActivityIndicator,
   Platform,
 } from 'react-native';
-import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
-import { auth } from '../config/firebase';
 import firebaseAuthService from '../services/firebaseAuth';
 
 interface OTPAuthProps {
@@ -23,23 +21,7 @@ const OTPAuth: React.FC<OTPAuthProps> = ({ onAuthSuccess, onAuthError }) => {
   const [otpCode, setOtpCode] = useState('');
   const [step, setStep] = useState<'phone' | 'otp'>('phone');
   const [loading, setLoading] = useState(false);
-  const [recaptchaVerifier, setRecaptchaVerifier] = useState<RecaptchaVerifier | null>(null);
-
-  useEffect(() => {
-    // Setup Recaptcha cho web
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      const verifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-        size: 'invisible',
-        callback: () => {
-          console.log('Recaptcha verified');
-        },
-        'expired-callback': () => {
-          console.log('Recaptcha expired');
-        }
-      });
-      setRecaptchaVerifier(verifier);
-    }
-  }, []);
+  // Using React Native Firebase exclusively for phone auth
 
   const handleSendOTP = async () => {
     if (!phoneNumber.trim()) {
@@ -49,24 +31,8 @@ const OTPAuth: React.FC<OTPAuthProps> = ({ onAuthSuccess, onAuthError }) => {
 
     setLoading(true);
     try {
-      let result;
-      
-      if (Platform.OS === 'web' && recaptchaVerifier) {
-        // Cho web, sử dụng Recaptcha
-        const confirmationResult = await signInWithPhoneNumber(
-          auth,
-          phoneNumber.startsWith('+') ? phoneNumber : `+84${phoneNumber.replace(/^0/, '')}`,
-          recaptchaVerifier
-        );
-        result = {
-          success: true,
-          message: 'OTP đã được gửi',
-          confirmationResult
-        };
-      } else {
-        // Cho mobile, sử dụng service
-        result = await firebaseAuthService.sendOTP(phoneNumber);
-      }
+      // Sử dụng service React Native Firebase cho cả flow
+      const result = await firebaseAuthService.sendOTP(phoneNumber);
 
       if (result.success) {
         setStep('otp');
@@ -93,13 +59,13 @@ const OTPAuth: React.FC<OTPAuthProps> = ({ onAuthSuccess, onAuthError }) => {
     setLoading(true);
     try {
       const result = await firebaseAuthService.verifyOTP(otpCode);
-      
+
       if (result.success && result.token) {
         Alert.alert('Thành công', 'Xác thực OTP thành công!');
-        
+
         // Gửi token về backend (mẫu)
-        const backendResult = await firebaseAuthService.sendTokenToBackend(result.token);
-        
+        const backendResult = await firebaseAuthService.sendTokenToBackend(result.token, phoneNumber);
+
         if (onAuthSuccess) {
           onAuthSuccess(result.token, result.user);
         }
@@ -133,7 +99,7 @@ const OTPAuth: React.FC<OTPAuthProps> = ({ onAuthSuccess, onAuthError }) => {
         <Text style={styles.subtitle}>
           Nhập số điện thoại để nhận mã OTP
         </Text>
-        
+
         <TextInput
           style={styles.input}
           placeholder="Nhập số điện thoại (VD: 0123456789)"
@@ -142,7 +108,7 @@ const OTPAuth: React.FC<OTPAuthProps> = ({ onAuthSuccess, onAuthError }) => {
           keyboardType="phone-pad"
           maxLength={15}
         />
-        
+
         <TouchableOpacity
           style={[styles.button, loading && styles.buttonDisabled]}
           onPress={handleSendOTP}
@@ -155,10 +121,7 @@ const OTPAuth: React.FC<OTPAuthProps> = ({ onAuthSuccess, onAuthError }) => {
           )}
         </TouchableOpacity>
 
-        {/* Recaptcha container cho web */}
-        {Platform.OS === 'web' && (
-          <div id="recaptcha-container" style={{ display: 'none' }} />
-        )}
+        {/* Recaptcha không cần cho React Native Firebase */}
       </View>
     );
   }
@@ -169,7 +132,7 @@ const OTPAuth: React.FC<OTPAuthProps> = ({ onAuthSuccess, onAuthError }) => {
       <Text style={styles.subtitle}>
         Mã OTP đã được gửi đến {phoneNumber}
       </Text>
-      
+
       <TextInput
         style={styles.input}
         placeholder="Nhập mã OTP (6 chữ số)"
@@ -178,7 +141,7 @@ const OTPAuth: React.FC<OTPAuthProps> = ({ onAuthSuccess, onAuthError }) => {
         keyboardType="number-pad"
         maxLength={6}
       />
-      
+
       <TouchableOpacity
         style={[styles.button, loading && styles.buttonDisabled]}
         onPress={handleVerifyOTP}
@@ -195,7 +158,7 @@ const OTPAuth: React.FC<OTPAuthProps> = ({ onAuthSuccess, onAuthError }) => {
         <TouchableOpacity onPress={handleBackToPhone}>
           <Text style={styles.linkText}>← Quay lại</Text>
         </TouchableOpacity>
-        
+
         <TouchableOpacity onPress={handleResendOTP}>
           <Text style={styles.linkText}>Gửi lại OTP</Text>
         </TouchableOpacity>

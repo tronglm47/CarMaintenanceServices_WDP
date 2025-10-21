@@ -19,7 +19,9 @@ export default {
         monochromeImage: "./assets/images/android-icon-monochrome.png"
       },
       edgeToEdgeEnabled: true,
-      predictiveBackGestureEnabled: false
+      predictiveBackGestureEnabled: false,
+      package: "com.evmaintenance.myapp",
+      googleServicesFile: "./google-services.json",
     },
     web: {
       output: "static",
@@ -27,6 +29,8 @@ export default {
     },
     plugins: [
       "expo-router",
+      "@react-native-firebase/app",
+      "@react-native-firebase/auth",
       [
         "expo-splash-screen",
         {
@@ -43,6 +47,11 @@ export default {
     experiments: {
       typedRoutes: true,
       reactCompiler: true
+    },
+    extra: {
+      eas: {
+        projectId: "51282b54-f3ec-4a55-abed-23a074ca5db3"
+      }
     }
   }
 };

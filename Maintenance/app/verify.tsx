@@ -8,15 +8,18 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import Toast from 'react-native-toast-message';
-import { smsService } from '@/services/mockSmsService';
+import firebaseAuthService from '@/services/firebaseAuth';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function VerifyScreen() {
   const { phoneNumber } = useLocalSearchParams();
+  const { login } = useAuth();
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [isLoading, setIsLoading] = useState(false);
   const [timeLeft, setTimeLeft] = useState(60);
@@ -58,7 +61,7 @@ export default function VerifyScreen() {
 
   const handleVerifyOTP = async () => {
     const otpString = otp.join('');
-    
+
     if (otpString.length !== 6) {
       Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ 6 số OTP');
       return;
@@ -67,22 +70,29 @@ export default function VerifyScreen() {
     setIsLoading(true);
 
     try {
-      // Xác thực OTP qua Firebase
-      await smsService.verifyOTP(otpString);
-      
-      // Show success toast
-      Toast.show({
-        type: 'success',
-        text1: 'Đăng nhập thành công!',
-        text2: 'Chào mừng bạn đến với Car Maintenance Services',
-        position: 'top',
-        visibilityTime: 3000,
-      });
+      // Complete authentication flow: OTP -> Firebase Token -> Backend Authentication
+      const result = await firebaseAuthService.authenticateWithOTP(phoneNumber as string, otpString);
 
-      // Navigate to home screen
-      setTimeout(() => {
-        router.replace('/(tabs)');
-      }, 1500);
+      if (result.success && result.data) {
+        // Store authentication tokens using auth context
+        await login(result.data.accessToken, result.data.refreshToken, result.data.role);
+
+        // Show success toast
+        Toast.show({
+          type: 'success',
+          text1: 'Đăng nhập thành công!',
+          text2: 'Chào mừng bạn đến với Car Maintenance Services',
+          position: 'top',
+          visibilityTime: 3000,
+        });
+
+        // Navigate to main app (tabs) after a short delay to show toast
+        setTimeout(() => {
+          router.replace('/(tabs)');
+        }, 1500);
+      } else {
+        Alert.alert('Lỗi', result.message);
+      }
 
     } catch (error) {
       Alert.alert('Lỗi', error instanceof Error ? error.message : 'Mã OTP không đúng. Vui lòng thử lại.');
@@ -97,17 +107,21 @@ export default function VerifyScreen() {
     setIsLoading(true);
     try {
       // Gửi lại OTP qua Firebase
-      await smsService.resendOTP(phoneNumber as string);
-      
-      setTimeLeft(60);
-      setOtp(['', '', '', '', '', '']);
-      
-      Toast.show({
-        type: 'info',
-        text1: 'Mã OTP mới đã được gửi',
-        text2: 'Vui lòng kiểm tra tin nhắn',
-        position: 'top',
-      });
+      const result = await firebaseAuthService.sendOTP(phoneNumber as string);
+
+      if (result.success) {
+        setTimeLeft(60);
+        setOtp(['', '', '', '', '', '']);
+
+        Toast.show({
+          type: 'info',
+          text1: 'Mã OTP mới đã được gửi',
+          text2: 'Vui lòng kiểm tra tin nhắn',
+          position: 'top',
+        });
+      } else {
+        Alert.alert('Lỗi', result.message);
+      }
     } catch (error) {
       Alert.alert('Lỗi', error instanceof Error ? error.message : 'Không thể gửi lại OTP. Vui lòng thử lại.');
     } finally {
@@ -125,27 +139,27 @@ export default function VerifyScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         style={styles.keyboardView}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <View style={styles.content}>
           {/* Header */}
           <View style={styles.header}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.backButton}
               onPress={() => router.back()}
             >
               <Ionicons name="arrow-back" size={24} color="#333" />
             </TouchableOpacity>
-            
+
             <View style={styles.logoContainer}>
               <Ionicons name="shield-checkmark" size={50} color="#4A90E2" />
             </View>
             <Text style={styles.title}>Xác thực OTP</Text>
             <Text style={styles.subtitle}>
               Chúng tôi đã gửi mã xác thực đến số{'\n'}
-              <Text style={styles.phoneNumber}>+84 {formatPhoneNumber(phoneNumber as string)}</Text>
+              <Text style={styles.phoneNumber}> {formatPhoneNumber(phoneNumber as string)}</Text>
             </Text>
           </View>
 
@@ -181,9 +195,11 @@ export default function VerifyScreen() {
               onPress={handleVerifyOTP}
               disabled={isLoading}
             >
-              <Text style={styles.verifyButtonText}>
-                {isLoading ? 'Đang xác thực...' : 'Xác thực'}
-              </Text>
+              {isLoading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.verifyButtonText}>Xác thực</Text>
+              )}
             </TouchableOpacity>
           </View>
 

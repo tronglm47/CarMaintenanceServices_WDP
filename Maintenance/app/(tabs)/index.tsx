@@ -1,21 +1,50 @@
 import React from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
-  TouchableOpacity, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
   TextInput,
   Dimensions,
-  Image
+  Image,
+  Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useAuth } from '@/contexts/AuthContext';
 
 const { width } = Dimensions.get('window');
 
 export default function HomeScreen() {
+  const { logout } = useAuth();
+
+  const handleLogout = async () => {
+    Alert.alert(
+      'Đăng xuất',
+      'Bạn có chắc muốn đăng xuất?',
+      [
+        {
+          text: 'Hủy',
+          onPress: () => { },
+          style: 'cancel',
+        },
+        {
+          text: 'Đăng xuất',
+          onPress: async () => {
+            try {
+              await logout();
+              router.replace('/login');
+            } catch (error) {
+              Alert.alert('Lỗi', 'Không thể đăng xuất');
+            }
+          },
+          style: 'destructive',
+        },
+      ]
+    );
+  };
   const serviceCategories = [
     { id: 1, name: 'Car Service', icon: 'car-sport' },
     { id: 2, name: 'Tyres & Wheel Care', icon: 'disc' },
@@ -33,7 +62,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView 
+      <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
@@ -41,14 +70,17 @@ export default function HomeScreen() {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <Text style={styles.greeting}>Hello Kamal</Text>
+            <Text style={styles.greeting}>Hello Huy</Text>
             <View style={styles.locationContainer}>
               <Text style={styles.location}>Mumbai, Maharashtra</Text>
               <Ionicons name="chevron-down" size={16} color="#666" />
             </View>
           </View>
-          <View style={styles.profileContainer}>
-            <Image 
+          <View style={styles.headerRight}>
+            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+              <Ionicons name="log-out" size={24} color="#FF4444" />
+            </TouchableOpacity>
+            <Image
               source={{ uri: 'https://via.placeholder.com/50x50/4A90E2/FFFFFF?text=K' }}
               style={styles.profileImage}
             />
@@ -108,24 +140,24 @@ export default function HomeScreen() {
         <View style={styles.servicesContainer}>
           <Text style={styles.servicesTitle}>Select Service</Text>
           <View style={styles.servicesGrid}>
-          {serviceCategories.map((service) => (
-            <TouchableOpacity 
-              key={service.id} 
-              style={styles.serviceItem}
-              onPress={() => router.push({
-                pathname: '/service-description',
-                params: { 
-                  serviceId: service.id.toString(),
-                  serviceName: service.name 
-                }
-              })}
-            >
-              <View style={styles.serviceIconContainer}>
-                <Ionicons name={service.icon as any} size={24} color="#4A90E2" />
-              </View>
-              <Text style={styles.serviceText}>{service.name}</Text>
-            </TouchableOpacity>
-          ))}
+            {serviceCategories.map((service) => (
+              <TouchableOpacity
+                key={service.id}
+                style={styles.serviceItem}
+                onPress={() => router.push({
+                  pathname: '/service-description',
+                  params: {
+                    serviceId: service.id.toString(),
+                    serviceName: service.name
+                  }
+                })}
+              >
+                <View style={styles.serviceIconContainer}>
+                  <Ionicons name={service.icon as any} size={24} color="#4A90E2" />
+                </View>
+                <Text style={styles.serviceText}>{service.name}</Text>
+              </TouchableOpacity>
+            ))}
           </View>
         </View>
       </ScrollView>
@@ -155,6 +187,19 @@ const styles = StyleSheet.create({
   headerLeft: {
     flex: 1,
   },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  logoutButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FFE0E0',
+  },
   greeting: {
     fontSize: 24,
     fontWeight: 'bold',
@@ -170,15 +215,10 @@ const styles = StyleSheet.create({
     color: '#666',
     marginRight: 4,
   },
-  profileContainer: {
+  profileImage: {
     width: 50,
     height: 50,
     borderRadius: 25,
-    overflow: 'hidden',
-  },
-  profileImage: {
-    width: '100%',
-    height: '100%',
   },
   searchContainer: {
     flexDirection: 'row',

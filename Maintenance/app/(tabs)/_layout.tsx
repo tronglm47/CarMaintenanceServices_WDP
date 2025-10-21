@@ -27,10 +27,10 @@ export default function TabLayout() {
         options={{
           title: 'Home',
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons 
-              name={focused ? 'home' : 'home-outline'} 
-              size={24} 
-              color={color} 
+            <Ionicons
+              name={focused ? 'home' : 'home-outline'}
+              size={24}
+              color={color}
             />
           ),
         }}
@@ -40,10 +40,10 @@ export default function TabLayout() {
         options={{
           title: 'Vehicles',
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons 
-              name={focused ? 'car' : 'car-outline'} 
-              size={24} 
-              color={color} 
+            <Ionicons
+              name={focused ? 'car' : 'car-outline'}
+              size={24}
+              color={color}
             />
           ),
         }}
@@ -53,10 +53,10 @@ export default function TabLayout() {
         options={{
           title: 'Records',
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons 
-              name={focused ? 'document-text' : 'document-text-outline'} 
-              size={24} 
-              color={color} 
+            <Ionicons
+              name={focused ? 'document-text' : 'document-text-outline'}
+              size={24}
+              color={color}
             />
           ),
         }}
