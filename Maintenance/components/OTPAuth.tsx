@@ -64,7 +64,7 @@ const OTPAuth: React.FC<OTPAuthProps> = ({ onAuthSuccess, onAuthError }) => {
         Alert.alert('Thành công', 'Xác thực OTP thành công!');
 
         // Gửi token về backend (mẫu)
-        const backendResult = await firebaseAuthService.sendTokenToBackend(result.token);
+        const backendResult = await firebaseAuthService.sendTokenToBackend(result.token, phoneNumber);
 
         if (onAuthSuccess) {
           onAuthSuccess(result.token, result.user);

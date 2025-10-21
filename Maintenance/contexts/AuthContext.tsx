@@ -5,6 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import auth from '@react-native-firebase/auth';
 import type { FirebaseAuthTypes } from '@react-native-firebase/auth';
 import firebaseAuthService from '@/services/firebaseAuth';
+import axiosService from '@/services/axiosConfig';
 
 interface AuthContextType {
     // Authentication state
@@ -99,7 +100,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     const logout = async () => {
         try {
-            // Sign out from Firebase
+            // Sign out from Firebase and call backend logout endpoint
+            // Interceptor will automatically add auth header to the logout request
             await firebaseAuthService.signOut();
 
             // Clear AsyncStorage
@@ -144,31 +146,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 throw new Error('No refresh token available');
             }
 
-            const API_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:3000';
-
-            const response = await fetch(`${API_BASE_URL}/api/auth/refresh-token`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    refreshToken: currentRefreshToken,
-                }),
+            const response = await axiosService.post<any>('/auth/refresh-token', {
+                refreshToken: currentRefreshToken,
             });
 
-            const data = await response.json();
+            if (response.data?.success && response.data.data) {
+                const newAccessToken = response.data.data.accessToken;
+                const newRefreshToken = response.data.data.refreshToken;
 
-            if (!response.ok) {
-                throw new Error(data.message || 'Failed to refresh token');
+                // Update stored and state tokens
+                await AsyncStorage.setItem('accessToken', newAccessToken);
+                await AsyncStorage.setItem('refreshToken', newRefreshToken);
+                setAccessToken(newAccessToken);
+                setRefreshToken(newRefreshToken);
+
+                return newAccessToken;
+            } else {
+                throw new Error(response.data?.message || 'Failed to refresh token');
             }
-
-            const newAccessToken = data.data.accessToken;
-
-            // Update stored and state tokens
-            await AsyncStorage.setItem('accessToken', newAccessToken);
-            setAccessToken(newAccessToken);
-
-            return newAccessToken;
         } catch (error) {
             console.error('Error refreshing access token:', error);
             // If refresh fails, logout user

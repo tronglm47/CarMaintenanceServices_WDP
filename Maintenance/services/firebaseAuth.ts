@@ -1,6 +1,7 @@
 import auth from '@react-native-firebase/auth';
 import { Platform } from 'react-native';
 import type { FirebaseAuthTypes } from '@react-native-firebase/auth';
+import axiosService from '@/services/axiosConfig';
 
 export interface AuthResult {
     success: boolean;
@@ -143,30 +144,22 @@ class ReactNativeFirebaseAuthService {
      */
     async sendTokenToBackend(idToken: string, phoneNumber?: string): Promise<BackendResponse> {
         try {
-            const API_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:3000';
-            console.log('Sending ID Token to backend:', idToken);
-            console.log('phonenumber:', phoneNumber);
-            const response = await fetch(`${API_BASE_URL}/api/auth/login-otp`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    idToken,
-                    phoneNumber: phoneNumber || auth().currentUser?.phoneNumber
-                }),
+            console.log('[Backend Auth] Sending ID Token to backend:', idToken);
+            // Ensure phone is in correct format
+            const formattedPhone = phoneNumber
+                ? this.formatPhoneNumber(phoneNumber)
+                : auth().currentUser?.phoneNumber;
+
+            const response = await axiosService.post<BackendResponse>('/auth/login-otp', {
+                idToken,
+                phoneNumber: formattedPhone
             });
 
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.message || 'Authentication failed');
-            }
-
+            console.log('Backend authentication successful:', response.data);
             return {
-                success: true,
-                message: 'Đăng nhập thành công',
-                data: data.data || data
+                success: response.data.success,
+                message: response.data.message,
+                data: response.data.data
             };
         } catch (error: any) {
             console.error('Error sending token to backend:', error);
@@ -208,6 +201,16 @@ class ReactNativeFirebaseAuthService {
      */
     async signOut(): Promise<void> {
         try {
+            // Call backend logout endpoint - interceptor will add auth header automatically
+            try {
+                await axiosService.post('/auth/logout', {});
+                console.log('Backend logout successful');
+            } catch (backendError) {
+                console.warn('Error calling backend logout:', backendError);
+                // Continue with Firebase logout even if backend logout fails
+            }
+
+            // Sign out from Firebase
             await auth().signOut();
             this.confirmationResult = null;
         } catch (error) {

@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
-import { useApi } from '@/services/apiService';
+import { useAxios } from '@/hooks/useAxios';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 
@@ -21,11 +21,11 @@ export default function TestAuthScreen() {
         accessToken,
         logout
     } = useAuth();
-    const api = useApi();
+    const api = useAxios();
 
     const handleTestApi = async () => {
         try {
-            const result = await api.get('/api/auth/profile');
+            const result = await api.get('/auth/profile');
             if (result.success) {
                 Alert.alert('API Test Success', JSON.stringify(result.data, null, 2));
             } else {

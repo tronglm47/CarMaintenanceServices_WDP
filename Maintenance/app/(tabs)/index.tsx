@@ -7,15 +7,44 @@ import {
   TouchableOpacity,
   TextInput,
   Dimensions,
-  Image
+  Image,
+  Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useAuth } from '@/contexts/AuthContext';
 
 const { width } = Dimensions.get('window');
 
 export default function HomeScreen() {
+  const { logout } = useAuth();
+
+  const handleLogout = async () => {
+    Alert.alert(
+      'Đăng xuất',
+      'Bạn có chắc muốn đăng xuất?',
+      [
+        {
+          text: 'Hủy',
+          onPress: () => { },
+          style: 'cancel',
+        },
+        {
+          text: 'Đăng xuất',
+          onPress: async () => {
+            try {
+              await logout();
+              router.replace('/login');
+            } catch (error) {
+              Alert.alert('Lỗi', 'Không thể đăng xuất');
+            }
+          },
+          style: 'destructive',
+        },
+      ]
+    );
+  };
   const serviceCategories = [
     { id: 1, name: 'Car Service', icon: 'car-sport' },
     { id: 2, name: 'Tyres & Wheel Care', icon: 'disc' },
@@ -47,7 +76,10 @@ export default function HomeScreen() {
               <Ionicons name="chevron-down" size={16} color="#666" />
             </View>
           </View>
-          <View style={styles.profileContainer}>
+          <View style={styles.headerRight}>
+            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+              <Ionicons name="log-out" size={24} color="#FF4444" />
+            </TouchableOpacity>
             <Image
               source={{ uri: 'https://via.placeholder.com/50x50/4A90E2/FFFFFF?text=K' }}
               style={styles.profileImage}
@@ -155,6 +187,19 @@ const styles = StyleSheet.create({
   headerLeft: {
     flex: 1,
   },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  logoutButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FFE0E0',
+  },
   greeting: {
     fontSize: 24,
     fontWeight: 'bold',
@@ -170,15 +215,10 @@ const styles = StyleSheet.create({
     color: '#666',
     marginRight: 4,
   },
-  profileContainer: {
+  profileImage: {
     width: 50,
     height: 50,
     borderRadius: 25,
-    overflow: 'hidden',
-  },
-  profileImage: {
-    width: '100%',
-    height: '100%',
   },
   searchContainer: {
     flexDirection: 'row',
