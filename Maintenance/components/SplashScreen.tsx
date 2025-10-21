@@ -2,7 +2,8 @@ import React, { useEffect } from 'react';
 import { View, StyleSheet, Image, Dimensions, Text } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import { router } from 'expo-router';
-import { smsService } from '@/services/mockSmsService';
+import firebaseAuthService from '@/services/firebaseAuth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width, height } = Dimensions.get('window');
 
@@ -19,12 +20,14 @@ export default function SplashScreenComponent({ onFinish }: SplashScreenProps) {
       try {
         // Simulate loading time
         await new Promise(resolve => setTimeout(resolve, 2000));
-        
+
         SplashScreen.hideAsync();
-        
-        // Kiểm tra trạng thái đăng nhập
-        const isLoggedIn = await smsService.isLoggedIn();
-        
+
+        // Kiểm tra trạng thái đăng nhập bằng AsyncStorage (đáng tin cậy hơn)
+        const accessToken = await AsyncStorage.getItem('accessToken');
+        const refreshToken = await AsyncStorage.getItem('refreshToken');
+        const isLoggedIn = !!(accessToken && refreshToken);
+
         if (isLoggedIn) {
           // Nếu đã đăng nhập, chuyển đến trang home
           console.log('User is logged in, navigating to home');
@@ -50,8 +53,8 @@ export default function SplashScreenComponent({ onFinish }: SplashScreenProps) {
     <View style={styles.container}>
       <View style={styles.contentContainer}>
         <View style={styles.imageContainer}>
-          <Image 
-            source={require('@/assets/images/background-login.png')} 
+          <Image
+            source={require('@/assets/images/background-login.png')}
             style={styles.logo}
             resizeMode="contain"
           />

@@ -1,10 +1,10 @@
 import React from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
-  TouchableOpacity, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
   TextInput,
   Dimensions,
   Image
@@ -33,7 +33,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView 
+      <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
@@ -41,14 +41,14 @@ export default function HomeScreen() {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <Text style={styles.greeting}>Hello Kamal</Text>
+            <Text style={styles.greeting}>Hello Huy</Text>
             <View style={styles.locationContainer}>
               <Text style={styles.location}>Mumbai, Maharashtra</Text>
               <Ionicons name="chevron-down" size={16} color="#666" />
             </View>
           </View>
           <View style={styles.profileContainer}>
-            <Image 
+            <Image
               source={{ uri: 'https://via.placeholder.com/50x50/4A90E2/FFFFFF?text=K' }}
               style={styles.profileImage}
             />
@@ -108,24 +108,24 @@ export default function HomeScreen() {
         <View style={styles.servicesContainer}>
           <Text style={styles.servicesTitle}>Select Service</Text>
           <View style={styles.servicesGrid}>
-          {serviceCategories.map((service) => (
-            <TouchableOpacity 
-              key={service.id} 
-              style={styles.serviceItem}
-              onPress={() => router.push({
-                pathname: '/service-description',
-                params: { 
-                  serviceId: service.id.toString(),
-                  serviceName: service.name 
-                }
-              })}
-            >
-              <View style={styles.serviceIconContainer}>
-                <Ionicons name={service.icon as any} size={24} color="#4A90E2" />
-              </View>
-              <Text style={styles.serviceText}>{service.name}</Text>
-            </TouchableOpacity>
-          ))}
+            {serviceCategories.map((service) => (
+              <TouchableOpacity
+                key={service.id}
+                style={styles.serviceItem}
+                onPress={() => router.push({
+                  pathname: '/service-description',
+                  params: {
+                    serviceId: service.id.toString(),
+                    serviceName: service.name
+                  }
+                })}
+              >
+                <View style={styles.serviceIconContainer}>
+                  <Ionicons name={service.icon as any} size={24} color="#4A90E2" />
+                </View>
+                <Text style={styles.serviceText}>{service.name}</Text>
+              </TouchableOpacity>
+            ))}
           </View>
         </View>
       </ScrollView>

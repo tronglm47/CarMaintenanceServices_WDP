@@ -1,226 +1,250 @@
-import { 
-  signInWithPhoneNumber, 
-  PhoneAuthProvider, 
-  signInWithCredential,
-  ConfirmationResult,
-  User
-} from 'firebase/auth';
-import { auth } from '../config/firebase';
+import auth from '@react-native-firebase/auth';
+import { Platform } from 'react-native';
+import type { FirebaseAuthTypes } from '@react-native-firebase/auth';
 
-export interface SMSAuthResult {
-  success: boolean;
-  message: string;
-  confirmationResult?: ConfirmationResult;
-  user?: User;
-  token?: string;
+export interface AuthResult {
+    success: boolean;
+    message: string;
+    token?: string;
+    user?: FirebaseAuthTypes.User;
+    confirmationResult?: FirebaseAuthTypes.ConfirmationResult;
 }
 
-class FirebaseAuthService {
-  private confirmationResult: ConfirmationResult | null = null;
+export interface BackendResponse {
+    success: boolean;
+    message: string;
+    data?: {
+        accessToken: string;
+        refreshToken: string;
+        expiresIn: number;
+        role: string;
+    };
+}
 
-  /**
-   * Gửi OTP đến số điện thoại
-   */
-  async sendOTP(phoneNumber: string, recaptchaVerifier?: any): Promise<SMSAuthResult> {
-    try {
-      // Thêm country code nếu chưa có
-      const formattedPhoneNumber = phoneNumber.startsWith('+') 
-        ? phoneNumber 
-        : `+84${phoneNumber.replace(/^0/, '')}`;
+class ReactNativeFirebaseAuthService {
+    private static instance: ReactNativeFirebaseAuthService;
+    private confirmationResult: FirebaseAuthTypes.ConfirmationResult | null = null;
 
-      console.log('Sending OTP to:', formattedPhoneNumber);
-
-      // Gửi OTP sử dụng signInWithPhoneNumber
-      this.confirmationResult = await signInWithPhoneNumber(
-        auth, 
-        formattedPhoneNumber, 
-        recaptchaVerifier || window // Cho web sử dụng window, cho mobile sẽ khác
-      );
-
-      return {
-        success: true,
-        message: 'OTP đã được gửi đến số điện thoại của bạn',
-        confirmationResult: this.confirmationResult
-      };
-    } catch (error: any) {
-      console.error('Error sending OTP:', error);
-      
-      let errorMessage = 'Có lỗi xảy ra khi gửi OTP';
-      
-      switch (error.code) {
-        case 'auth/invalid-phone-number':
-          errorMessage = 'Số điện thoại không hợp lệ';
-          break;
-        case 'auth/too-many-requests':
-          errorMessage = 'Quá nhiều yêu cầu. Vui lòng thử lại sau';
-          break;
-        case 'auth/quota-exceeded':
-          errorMessage = 'Đã vượt quá giới hạn SMS. Vui lòng thử lại sau';
-          break;
-        case 'auth/missing-phone-number':
-          errorMessage = 'Vui lòng nhập số điện thoại';
-          break;
-        default:
-          errorMessage = error.message || errorMessage;
-      }
-
-      return {
-        success: false,
-        message: errorMessage
-      };
-    }
-  }
-
-  /**
-   * Xác thực OTP và đăng nhập
-   */
-  async verifyOTP(otpCode: string): Promise<SMSAuthResult> {
-    try {
-      if (!this.confirmationResult) {
-        return {
-          success: false,
-          message: 'Vui lòng gửi OTP trước khi xác thực'
-        };
-      }
-
-      console.log('Verifying OTP:', otpCode);
-
-      // Xác thực OTP
-      const result = await this.confirmationResult.confirm(otpCode);
-      
-      if (result.user) {
-        // Lấy ID token để gửi về backend
-        const idToken = await result.user.getIdToken();
-        
-        console.log('OTP verification successful for user:', result.user.uid);
-        
-        return {
-          success: true,
-          message: 'Xác thực thành công',
-          user: result.user,
-          token: idToken
-        };
-      } else {
-        return {
-          success: false,
-          message: 'Xác thực thất bại'
-        };
-      }
-    } catch (error: any) {
-      console.error('Error verifying OTP:', error);
-      
-      let errorMessage = 'Mã OTP không đúng';
-      
-      switch (error.code) {
-        case 'auth/invalid-verification-code':
-          errorMessage = 'Mã OTP không đúng';
-          break;
-        case 'auth/code-expired':
-          errorMessage = 'Mã OTP đã hết hạn. Vui lòng gửi lại';
-          break;
-        case 'auth/credential-already-in-use':
-          errorMessage = 'Tài khoản này đã được sử dụng';
-          break;
-        case 'auth/invalid-verification-id':
-          errorMessage = 'Phiên xác thực đã hết hạn. Vui lòng gửi lại OTP';
-          break;
-        default:
-          errorMessage = error.message || errorMessage;
-      }
-
-      return {
-        success: false,
-        message: errorMessage
-      };
-    }
-  }
-
-  /**
-   * Gửi token Firebase về backend để lấy access token (MẪU)
-   */
-  async sendTokenToBackend(firebaseToken: string): Promise<any> {
-    try {
-      console.log('Sending Firebase token to backend...');
-      
-      // MẪU: Gửi token về backend
-      // Thay thế URL này bằng endpoint thực tế của bạn
-      const response = await fetch('https://your-backend-api.com/auth/firebase', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          firebaseToken: firebaseToken
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      console.log('Backend response:', data);
-      
-      return {
-        success: true,
-        accessToken: data.accessToken,
-        user: data.user,
-        message: 'Đăng nhập thành công'
-      };
-    } catch (error: any) {
-      console.error('Error sending token to backend:', error);
-      
-      // Trong trường hợp backend chưa sẵn sàng, trả về mẫu
-      return {
-        success: false,
-        message: 'Backend chưa sẵn sàng. Sử dụng Firebase token tạm thời.',
-        mockResponse: {
-          accessToken: 'mock-access-token-' + Date.now(),
-          user: {
-            id: 'mock-user-id',
-            phoneNumber: 'mock-phone'
-          }
+    public static getInstance(): ReactNativeFirebaseAuthService {
+        if (!ReactNativeFirebaseAuthService.instance) {
+            ReactNativeFirebaseAuthService.instance = new ReactNativeFirebaseAuthService();
         }
-      };
+        return ReactNativeFirebaseAuthService.instance;
     }
-  }
 
-  /**
-   * Đăng xuất
-   */
-  async signOut(): Promise<void> {
-    try {
-      await auth.signOut();
-      this.confirmationResult = null;
-      console.log('User signed out successfully');
-    } catch (error) {
-      console.error('Error signing out:', error);
-      throw error;
+    /**
+     * Format Vietnamese phone number to international format
+     */
+    private formatPhoneNumber(phoneNumber: string): string {
+        // Remove all non-digit characters
+        const cleaned = phoneNumber.replace(/\D/g, '');
+
+        // If starts with 0, replace with +84
+        if (cleaned.startsWith('0')) {
+            return '+84' + cleaned.substring(1);
+        }
+
+        // If starts with 84, add +
+        if (cleaned.startsWith('84')) {
+            return '+' + cleaned;
+        }
+
+        // If already has +, return as is
+        if (phoneNumber.startsWith('+')) {
+            return phoneNumber;
+        }
+
+        // Default: add +84
+        return '+84' + cleaned;
     }
-  }
 
-  /**
-   * Lấy user hiện tại
-   */
-  getCurrentUser(): User | null {
-    return auth.currentUser;
-  }
+    /**
+     * Send OTP to phone number using React Native Firebase
+     */
+    async sendOTP(phoneNumber: string): Promise<AuthResult> {
+        try {
+            const formattedPhone = this.formatPhoneNumber(phoneNumber);
+            console.log('Formatted Phone Number:', formattedPhone);
+            console.log('Sending OTP with React Native Firebase to:', formattedPhone);
 
-  /**
-   * Lấy Firebase ID token hiện tại
-   */
-  async getCurrentToken(): Promise<string | null> {
-    try {
-      const user = this.getCurrentUser();
-      if (user) {
-        return await user.getIdToken();
-      }
-      return null;
-    } catch (error) {
-      console.error('Error getting current token:', error);
-      return null;
+            // React Native Firebase automatically handles SMS sending
+            this.confirmationResult = await auth().signInWithPhoneNumber(formattedPhone);
+
+            return {
+                success: true,
+                message: 'OTP đã được gửi thành công',
+                confirmationResult: this.confirmationResult
+            };
+        } catch (error: any) {
+            console.error('Error sending OTP:', error);
+
+            let errorMessage = 'Không thể gửi OTP. Vui lòng thử lại.';
+
+            if (error.code === 'auth/invalid-phone-number') {
+                errorMessage = 'Số điện thoại không hợp lệ';
+            } else if (error.code === 'auth/too-many-requests') {
+                errorMessage = 'Quá nhiều yêu cầu. Vui lòng thử lại sau';
+            } else if (error.code === 'auth/quota-exceeded') {
+                errorMessage = 'Đã vượt quá giới hạn SMS. Vui lòng thử lại sau';
+            }
+
+            return {
+                success: false,
+                message: errorMessage
+            };
+        }
     }
-  }
+
+    /**
+     * Verify OTP and get Firebase ID Token
+     */
+    async verifyOTP(otp: string): Promise<AuthResult> {
+        try {
+            if (!this.confirmationResult) {
+                throw new Error('No confirmation result available');
+            }
+
+            // Confirm the OTP
+            const userCredential = await this.confirmationResult.confirm(otp);
+
+            if (!userCredential || !userCredential.user) {
+                throw new Error('Verification failed');
+            }
+
+            // Get Firebase ID Token
+            const idToken = await userCredential.user.getIdToken();
+
+            return {
+                success: true,
+                message: 'Xác thực OTP thành công',
+                token: idToken,
+                user: userCredential.user
+            };
+        } catch (error: any) {
+            console.error('Error verifying OTP:', error);
+
+            let errorMessage = 'Mã OTP không đúng. Vui lòng thử lại.';
+
+            if (error.code === 'auth/invalid-verification-code') {
+                errorMessage = 'Mã OTP không đúng';
+            } else if (error.code === 'auth/code-expired') {
+                errorMessage = 'Mã OTP đã hết hạn';
+            }
+
+            return {
+                success: false,
+                message: errorMessage
+            };
+        }
+    }
+
+    /**
+     * Send Firebase ID Token to backend for authentication
+     */
+    async sendTokenToBackend(idToken: string, phoneNumber?: string): Promise<BackendResponse> {
+        try {
+            const API_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:3000';
+            console.log('Sending ID Token to backend:', idToken);
+            console.log('phonenumber:', phoneNumber);
+            const response = await fetch(`${API_BASE_URL}/api/auth/login-otp`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    idToken,
+                    phoneNumber: phoneNumber || auth().currentUser?.phoneNumber
+                }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.message || 'Authentication failed');
+            }
+
+            return {
+                success: true,
+                message: 'Đăng nhập thành công',
+                data: data.data || data
+            };
+        } catch (error: any) {
+            console.error('Error sending token to backend:', error);
+            return {
+                success: false,
+                message: error.message || 'Lỗi kết nối đến server'
+            };
+        }
+    }
+
+    /**
+     * Complete authentication flow: OTP -> Firebase Token -> Backend Authentication
+     */
+    async authenticateWithOTP(phoneNumber: string, otp: string): Promise<BackendResponse> {
+        try {
+            // Step 1: Verify OTP with Firebase
+            const otpResult = await this.verifyOTP(otp);
+            if (!otpResult.success || !otpResult.token) {
+                return {
+                    success: false,
+                    message: otpResult.message
+                };
+            }
+
+            // Step 2: Send token to backend
+            const backendResult = await this.sendTokenToBackend(otpResult.token, phoneNumber);
+            return backendResult;
+        } catch (error: any) {
+            console.error('Error in complete authentication flow:', error);
+            return {
+                success: false,
+                message: 'Lỗi trong quá trình xác thực'
+            };
+        }
+    }
+
+    /**
+     * Sign out
+     */
+    async signOut(): Promise<void> {
+        try {
+            await auth().signOut();
+            this.confirmationResult = null;
+        } catch (error) {
+            console.error('Error signing out:', error);
+            throw new Error('Không thể đăng xuất. Vui lòng thử lại.');
+        }
+    }
+
+    /**
+     * Get current user
+     */
+    getCurrentUser() {
+        return auth().currentUser;
+    }
+
+    /**
+     * Check if user is authenticated (sync check only)
+     * Note: This only checks Firebase current user synchronously
+     */
+    isAuthenticated(): boolean {
+        return auth().currentUser !== null;
+    }
+
+    /**
+     * Check if user is authenticated with async storage tokens
+     * Use this for more reliable authentication check
+     */
+    async isAuthenticatedAsync(): Promise<boolean> {
+        try {
+            const accessToken = await require('@react-native-async-storage/async-storage').default.getItem('accessToken');
+            const refreshToken = await require('@react-native-async-storage/async-storage').default.getItem('refreshToken');
+            return !!(accessToken && refreshToken);
+        } catch (error) {
+            console.error('Error checking async authentication:', error);
+            return false;
+        }
+    }
 }
 
-export default new FirebaseAuthService();
+export default ReactNativeFirebaseAuthService.getInstance();

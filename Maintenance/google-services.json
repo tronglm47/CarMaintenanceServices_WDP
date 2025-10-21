@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "742878712475",
+    "project_id": "ev-maintenance",
+    "storage_bucket": "ev-maintenance.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:742878712475:android:4c1de85e0206c0ca90ec3e",
+        "android_client_info": {
+          "package_name": "com.evmaintenance.myapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA8qZsWiRYqGArdQbDOnDpCPQgHJi7gZFQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

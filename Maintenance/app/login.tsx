@@ -8,11 +8,12 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { smsService } from '@/services/mockSmsService';
+import firebaseAuthService from '@/services/firebaseAuth';
 import RecaptchaContainer from '@/components/RecaptchaContainer';
 
 export default function LoginScreen() {
@@ -37,13 +38,18 @@ export default function LoginScreen() {
 
     try {
       // Gửi OTP qua Firebase SMS
-      await smsService.sendOTP(phoneNumber);
-      
-      // Navigate to verify screen with phone number
-      router.push({
-        pathname: '/verify',
-        params: { phoneNumber: phoneNumber }
-      });
+      console.log('Formatted Phone Number login:', phoneNumber);
+      const result = await firebaseAuthService.sendOTP(phoneNumber);
+
+      if (result.success) {
+        // Navigate to verify screen with phone number
+        router.push({
+          pathname: '/verify',
+          params: { phoneNumber: phoneNumber }
+        });
+      } else {
+        Alert.alert('Lỗi', result.message);
+      }
     } catch (error) {
       Alert.alert('Lỗi', error instanceof Error ? error.message : 'Không thể gửi OTP. Vui lòng thử lại.');
     } finally {
@@ -54,7 +60,7 @@ export default function LoginScreen() {
   const formatPhoneNumber = (text: string) => {
     // Remove all non-digits
     const cleaned = text.replace(/\D/g, '');
-    
+
     // Format Vietnamese phone number
     if (cleaned.length <= 3) {
       return cleaned;
@@ -69,7 +75,7 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         style={styles.keyboardView}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
@@ -110,9 +116,11 @@ export default function LoginScreen() {
                 onPress={handleSendOTP}
                 disabled={isLoading}
               >
-                <Text style={styles.sendButtonText}>
-                  {isLoading ? 'Đang gửi...' : 'Gửi mã OTP'}
-                </Text>
+                {isLoading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.sendButtonText}>Gửi mã OTP</Text>
+                )}
               </TouchableOpacity>
             </View>
 

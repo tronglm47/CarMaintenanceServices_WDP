@@ -10,23 +10,20 @@ const LoginExample: React.FC = () => {
   const handleAuthSuccess = async (firebaseToken: string, userData: any) => {
     console.log('Firebase Token:', firebaseToken);
     console.log('User Data:', userData);
-    
+
     setIsAuthenticated(true);
     setUser(userData);
-    
+
     // Gửi token về backend để lấy access token
     try {
       const backendResult = await firebaseAuthService.sendTokenToBackend(firebaseToken);
       console.log('Backend Result:', backendResult);
-      
+
       if (backendResult.success) {
         Alert.alert('Thành công', 'Đăng nhập thành công!');
-        console.log('Access Token:', backendResult.accessToken);
+        console.log('Backend login successful');
       } else {
         Alert.alert('Thông báo', backendResult.message);
-        if (backendResult.mockResponse) {
-          console.log('Mock Response:', backendResult.mockResponse);
-        }
       }
     } catch (error) {
       console.error('Error with backend:', error);
@@ -54,7 +51,7 @@ const LoginExample: React.FC = () => {
       <View style={styles.container}>
         <Text style={styles.title}>Đăng nhập thành công!</Text>
         <Text style={styles.subtitle}>Chào mừng bạn</Text>
-        
+
         <View style={styles.userInfo}>
           <Text style={styles.infoText}>UID: {user.uid}</Text>
           <Text style={styles.infoText}>Phone: {user.phoneNumber}</Text>
@@ -71,7 +68,7 @@ const LoginExample: React.FC = () => {
   }
 
   return (
-    <OTPAuth 
+    <OTPAuth
       onAuthSuccess={handleAuthSuccess}
       onAuthError={handleAuthError}
     />
