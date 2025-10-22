@@ -109,6 +109,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     const logout = async () => {
         try {
+            // Clean up device token before logout
+            // Import inside function to avoid circular dependency
+            const { removePushToken } = await import('@/apis/notifications.api');
+
+            // Get stored device token if available
+            try {
+                const token = await AsyncStorage.getItem('deviceToken');
+                if (token) {
+                    await removePushToken(token);
+                    await AsyncStorage.removeItem('deviceToken');
+                    console.log('✅ Device token unregistered on logout');
+                }
+            } catch (error) {
+                console.warn('⚠️ Could not unregister device token:', error);
+                // Continue with logout even if token cleanup fails
+            }
+
             // Sign out from Firebase and call backend logout endpoint
             // Interceptor will automatically add auth header to the logout request
             await firebaseAuthService.signOut();
