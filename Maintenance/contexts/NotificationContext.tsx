@@ -49,15 +49,20 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
 
     const requestPushToken = async () => {
         try {
+
             const token = await registerForPushNotificationsAsync();
             if (token) {
+
                 setPushToken(token);
                 // Store token to AsyncStorage for later cleanup on logout
                 await AsyncStorage.setItem('deviceToken', token);
-                updatePushToken(token);
+                await updatePushToken(token);
+                console.log('✅ Token sent to backend successfully');
+            } else {
+                console.warn('⚠️ No token received from registerForPushNotificationsAsync');
             }
         } catch (error) {
-            console.log(error);
+            console.error('❌ Error requesting push token:', error);
         }
     };
 
@@ -93,8 +98,8 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
                 const data = response.notification.request.content.data;
 
                 if (data.type && data.type === "alert") {
-                    // Navigate to home screen
-                    router.push("/(tabs)/");
+                    // Navigate to home screen (tabs index)
+                    router.replace("/(tabs)");
                 }
             });
 
@@ -110,8 +115,8 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
             const data = response.notification.request.content.data;
 
             if (data.type && data.type === "alert") {
-                // Navigate to home screen
-                router.push("/(tabs)/");
+                // Navigate to home screen (tabs index)
+                router.replace("/(tabs)");
             }
         });
 

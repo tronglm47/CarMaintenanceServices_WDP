@@ -16,10 +16,12 @@ import { router, useLocalSearchParams } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import firebaseAuthService from '@/services/firebaseAuth';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNotification } from '@/contexts/NotificationContext';
 
 export default function VerifyScreen() {
   const { phoneNumber } = useLocalSearchParams();
   const { login } = useAuth();
+  const { requestPushToken } = useNotification();
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [isLoading, setIsLoading] = useState(false);
   const [timeLeft, setTimeLeft] = useState(60);
@@ -76,6 +78,10 @@ export default function VerifyScreen() {
       if (result.success && result.data) {
         // Store authentication tokens using auth context
         await login(result.data.accessToken, result.data.refreshToken, result.data.role);
+
+        // Register device token for push notifications
+        console.log('📱 Registering device token after login...');
+        await requestPushToken();
 
         // Show success toast
         Toast.show({
