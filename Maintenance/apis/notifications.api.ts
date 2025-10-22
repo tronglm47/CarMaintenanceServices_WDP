@@ -10,12 +10,13 @@ import axiosService from "@/services/axiosConfig";
  */
 export async function updatePushToken(token: string) {
     try {
+        console.log('🌐 Sending deviceToken to backend:', token);
         const res = await axiosService.post("/auth/deviceToken", {
             token: token,
         });
         return res.data;
     } catch (error) {
-        console.log(error);
+        console.error('❌ Error sending deviceToken:', error);
     }
 }
 

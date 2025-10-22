@@ -40,7 +40,9 @@ export default function RootLayout() {
   return (
     <AuthProvider>
       <NotificationProvider>
+
         <AppNavigator colorScheme={colorScheme} />
+
       </NotificationProvider>
     </AuthProvider>
   );
@@ -56,7 +58,11 @@ function AppNavigator({ colorScheme }: { colorScheme: ColorSchemeName }) {
       setHasInitialized(true);
       console.log('✅ Auth loading completed');
       console.log('🔐 User authenticated:', isAuthenticated);
-      console.log('📍 Navigating to:', isAuthenticated ? '(tabs)' : 'login');
+      const targetRoute = isAuthenticated ? '/(tabs)' : '/login';
+      console.log('📍 Navigating to:', targetRoute);
+      
+      // Navigate to the correct route
+      router.replace(targetRoute);
     }
   }, [authLoading, hasInitialized, isAuthenticated]);
 
@@ -70,7 +76,7 @@ function AppNavigator({ colorScheme }: { colorScheme: ColorSchemeName }) {
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack initialRouteName={isAuthenticated ? '(tabs)' : 'login'}>
+      <Stack initialRouteName="login">
         <Stack.Screen name="test" options={{ headerShown: false }} />
         <Stack.Screen name="test-auth" options={{ headerShown: false }} />
         <Stack.Screen name="auth-debug" options={{ headerShown: false }} />
