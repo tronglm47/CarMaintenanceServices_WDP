@@ -210,6 +210,11 @@ class AxiosService {
     public async delete<T = any>(url: string, config?: any) {
         return this.instance.delete<T>(url, config);
     }
+
+    // Convenience method for DELETE with body (wraps data in config.data)
+    public async deleteWithData<T = any>(url: string, data?: any, config?: any) {
+        return this.instance.delete<T>(url, { ...config, data });
+    }
 }
 
 // Export singleton instance

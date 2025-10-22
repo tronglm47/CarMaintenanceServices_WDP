@@ -26,17 +26,16 @@ export async function updatePushToken(token: string) {
  * 
  * Pattern: Same as alert-backend
  * - DELETE /auth/deviceToken
- * - Params: { token: string }
+ * - Body: { token: string }
  */
 export async function removePushToken(token: string) {
     try {
-        const res = await axiosService.delete("/auth/deviceToken", {
-            params: {
-                token: token,
-            },
+        console.log('🌐 Removing deviceToken from backend:', token);
+        const res = await axiosService.deleteWithData("/auth/deviceToken", {
+            token: token,
         });
         return res.data;
     } catch (error) {
-        console.log(error);
+        console.error('❌ Error removing deviceToken:', error);
     }
 }
