@@ -7,14 +7,28 @@ import { useEffect, useState } from 'react';
 import type { ColorSchemeName } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { router } from 'expo-router';
-
-// Initialize Firebase before anything else
-import Firebase from '@react-native-firebase/app';
-Firebase.app();
-
+import * as Notification from "expo-notifications";
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import SplashScreenComponent from '@/components/SplashScreen';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { NotificationProvider } from '@/contexts/NotificationContext';
+
+// Initialize Firebase before anything else
+import Firebase from '@react-native-firebase/app';
+import { Toaster } from 'sonner-native';
+
+Firebase.app();
+
+// Setup notification handlers
+Notification.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
+
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -25,7 +39,9 @@ export default function RootLayout() {
 
   return (
     <AuthProvider>
-      <AppNavigator colorScheme={colorScheme} />
+      <NotificationProvider>
+        <AppNavigator colorScheme={colorScheme} />
+      </NotificationProvider>
     </AuthProvider>
   );
 }
@@ -68,7 +84,7 @@ function AppNavigator({ colorScheme }: { colorScheme: ColorSchemeName }) {
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
       </Stack>
       <StatusBar style="auto" />
-      <Toast />
+      <Toaster richColors swipeToDismissDirection="left" />
     </ThemeProvider>
   );
 }
