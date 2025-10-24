@@ -83,6 +83,19 @@ class AxiosService {
     private async responseErrorHandler(error: AxiosError) {
         const originalRequest = error.config as CustomAxiosRequestConfig;
 
+        // Add more detailed logging to trace which request caused the 401/refresh flow
+        try {
+            console.error('Axios response error:', {
+                url: originalRequest?.url,
+                method: originalRequest?.method,
+                status: error.response?.status,
+                data: error.response?.data,
+                message: error.message,
+            });
+        } catch (logErr) {
+            console.error('Failed to log axios error details', logErr);
+        }
+
         // Handle 401 Unauthorized - Token expired or invalid
         if (error.response?.status === 401 && !originalRequest._retry) {
             originalRequest._retry = true;

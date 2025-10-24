@@ -16,6 +16,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import firebaseAuthService from '@/services/firebaseAuth';
 import { useAuth } from '@/contexts/AuthContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNotification } from '@/contexts/NotificationContext';
 
 export default function VerifyScreen() {
@@ -81,6 +82,15 @@ export default function VerifyScreen() {
 
         // Register device token for push notifications
         console.log('📱 Registering device token after login...');
+        // Debug: ensure tokens are persisted before registering device token
+        try {
+          const a = await AsyncStorage.getItem('accessToken');
+          const r = await AsyncStorage.getItem('refreshToken');
+          console.log('DEBUG tokens after login (before push):', { hasAccess: !!a, hasRefresh: !!r });
+        } catch (e) {
+          console.error('Failed to read tokens from AsyncStorage before push registration', e);
+        }
+
         await requestPushToken();
 
         // Show success toast

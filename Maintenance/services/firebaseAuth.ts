@@ -162,10 +162,16 @@ class ReactNativeFirebaseAuthService {
                 data: response.data.data
             };
         } catch (error: any) {
-            console.error('Error sending token to backend:', error);
+            console.error('[Backend Auth] Error sending token to backend:', {
+                message: error?.message,
+                status: error?.response?.status,
+                responseData: error?.response?.data,
+                stack: error?.stack
+            });
+
             return {
                 success: false,
-                message: error.message || 'Lỗi kết nối đến server'
+                message: error?.response?.data?.message || error?.message || 'Lỗi kết nối đến server'
             };
         }
     }
