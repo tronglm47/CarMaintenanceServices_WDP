@@ -12,6 +12,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import SplashScreenComponent from '@/components/SplashScreen';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { NotificationProvider } from '@/contexts/NotificationContext';
+import ChatFloatingButton from '@/components/ChatFloatingButton';
 
 // Initialize Firebase before anything else
 import Firebase from '@react-native-firebase/app';
@@ -87,10 +88,12 @@ function AppNavigator({ colorScheme }: { colorScheme: ColorSchemeName }) {
         <Stack.Screen name="booking-success" options={{ headerShown: false }} />
         <Stack.Screen name="tracking" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="chat" options={{ headerShown: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
       </Stack>
       <StatusBar style="auto" />
       <Toaster richColors swipeToDismissDirection="left" />
+      <ChatFloatingButton />
     </ThemeProvider>
   );
 }
