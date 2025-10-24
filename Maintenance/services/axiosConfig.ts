@@ -31,8 +31,8 @@ class AxiosService {
     private refreshSubscribers: ((token: string) => void)[] = [];
 
     constructor() {
-        const baseURL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:3000';
-
+        const baseURL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://ev-maintenance-9bd58b96744e.herokuapp.com/api'
+console.log('baseURL', baseURL);
         this.instance = axios.create({
             baseURL,
             timeout: 30000,
@@ -144,7 +144,7 @@ class AxiosService {
                 throw new Error('No refresh token available');
             }
 
-            const baseURL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:3000';
+            const baseURL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://ev-maintenance-9bd58b96744e.herokuapp.com/api';
 
             const response = await axios.post<RefreshTokenResponse>(
                 `${baseURL}/auth/refresh-token`,
