@@ -1,12 +1,11 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { useEffect, useState } from 'react';
 import type { ColorSchemeName } from 'react-native';
-import Toast from 'react-native-toast-message';
-import { router } from 'expo-router';
 import * as Notification from "expo-notifications";
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import SplashScreenComponent from '@/components/SplashScreen';
@@ -51,6 +50,7 @@ export default function RootLayout() {
 
 function AppNavigator({ colorScheme }: { colorScheme: ColorSchemeName }) {
   const { isLoading: authLoading, isAuthenticated } = useAuth();
+  const router = useRouter();
   const [hasInitialized, setHasInitialized] = useState(false);
 
   useEffect(() => {
@@ -61,9 +61,10 @@ function AppNavigator({ colorScheme }: { colorScheme: ColorSchemeName }) {
       console.log('🔐 User authenticated:', isAuthenticated);
       const targetRoute = isAuthenticated ? '/(tabs)' : '/login';
       console.log('📍 Navigating to:', targetRoute);
-      
-      // Navigate to the correct route
-      router.replace(targetRoute);
+
+      // Navigate to the correct route using router hook
+      // small safety: replace navigation after a microtask so root has time to settle
+      setTimeout(() => router.replace(targetRoute), 0);
     }
   }, [authLoading, hasInitialized, isAuthenticated]);
 
@@ -76,25 +77,27 @@ function AppNavigator({ colorScheme }: { colorScheme: ColorSchemeName }) {
   console.log('🎯 Rendering main navigation. isAuthenticated:', isAuthenticated);
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack initialRouteName="login">
-        <Stack.Screen name="test" options={{ headerShown: false }} />
-        <Stack.Screen name="test-auth" options={{ headerShown: false }} />
-        <Stack.Screen name="auth-debug" options={{ headerShown: false }} />
-        <Stack.Screen name="login" options={{ headerShown: false }} />
-        <Stack.Screen name="verify" options={{ headerShown: false }} />
-        <Stack.Screen name="service-description" options={{ headerShown: false }} />
-        <Stack.Screen name="payment" options={{ headerShown: false }} />
-        <Stack.Screen name="booking-success" options={{ headerShown: false }} />
-        <Stack.Screen name="tracking" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="chat" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      </Stack>
-      <StatusBar style="auto" />
-      <Toaster richColors swipeToDismissDirection="left" />
-      <ChatFloatingButton />
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        <Stack initialRouteName="login">
+          <Stack.Screen name="test" options={{ headerShown: false }} />
+          <Stack.Screen name="test-auth" options={{ headerShown: false }} />
+          <Stack.Screen name="auth-debug" options={{ headerShown: false }} />
+          <Stack.Screen name="login" options={{ headerShown: false }} />
+          <Stack.Screen name="verify" options={{ headerShown: false }} />
+          <Stack.Screen name="service-description" options={{ headerShown: false }} />
+          <Stack.Screen name="payment" options={{ headerShown: false }} />
+          <Stack.Screen name="booking-success" options={{ headerShown: false }} />
+          <Stack.Screen name="tracking" options={{ headerShown: false }} />
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="chat" options={{ headerShown: false }} />
+          <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+        </Stack>
+        <StatusBar style="auto" />
+        <Toaster richColors swipeToDismissDirection="left" />
+        <ChatFloatingButton />
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }
 

@@ -12,17 +12,20 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
-import Toast from 'react-native-toast-message';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { toast } from 'sonner-native';
 import firebaseAuthService from '@/services/firebaseAuth';
 import { useAuth } from '@/contexts/AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNotification } from '@/contexts/NotificationContext';
+import auth from '@react-native-firebase/auth';
 
 export default function VerifyScreen() {
   const { phoneNumber } = useLocalSearchParams();
+  const router = useRouter();
   const { login } = useAuth();
   const { requestPushToken } = useNotification();
+  const [isProcessingAuth, setIsProcessingAuth] = useState(false);
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [isLoading, setIsLoading] = useState(false);
   const [timeLeft, setTimeLeft] = useState(60);
@@ -40,7 +43,41 @@ export default function VerifyScreen() {
       });
     }, 1000);
 
-    return () => clearInterval(timer);
+    // Listen for Firebase auth state changes because some Android versions
+    // auto-retrieve SMS verification and sign the user in in the background.
+    // If that happens, proceed to exchange the ID token with the backend
+    // so the user is fully logged into the app without showing an expired OTP message.
+    const unsubscribeAuth = auth().onAuthStateChanged(async (user) => {
+      if (!user) return;
+      if (isProcessingAuth) return;
+
+      setIsProcessingAuth(true);
+      setIsLoading(true);
+
+      try {
+        const idToken = await user.getIdToken();
+        const backendResult = await firebaseAuthService.sendTokenToBackend(idToken, phoneNumber as string);
+
+        if (backendResult.success && backendResult.data) {
+          await login(backendResult.data.accessToken, backendResult.data.refreshToken, backendResult.data.role);
+          await requestPushToken();
+
+          toast.success('Đăng nhập thành công! Chào mừng bạn đến với Car Maintenance Services');
+
+          router.replace('/(tabs)');
+        }
+      } catch (e) {
+        console.error('Error handling auto sign-in:', e);
+      } finally {
+        setIsProcessingAuth(false);
+        setIsLoading(false);
+      }
+    });
+
+    return () => {
+      clearInterval(timer);
+      unsubscribeAuth();
+    };
   }, []);
 
   const handleOtpChange = (value: string, index: number) => {
@@ -73,6 +110,25 @@ export default function VerifyScreen() {
     setIsLoading(true);
 
     try {
+      // If the device has already auto-signed-in (Android SMS retrieval), prefer
+      // to exchange the current user's ID token with backend instead of re-confirming
+      // the OTP which will return expired.
+      const currentUser = auth().currentUser;
+      if (currentUser) {
+        const idToken = await currentUser.getIdToken();
+        const backendResult = await firebaseAuthService.sendTokenToBackend(idToken, phoneNumber as string);
+
+        if (backendResult.success && backendResult.data) {
+          await login(backendResult.data.accessToken, backendResult.data.refreshToken, backendResult.data.role);
+          await requestPushToken();
+
+          toast.success('Đăng nhập thành công! Chào mừng bạn đến với Car Maintenance Services');
+
+          setTimeout(() => router.replace('/(tabs)'), 1500);
+          return;
+        }
+      }
+
       // Complete authentication flow: OTP -> Firebase Token -> Backend Authentication
       const result = await firebaseAuthService.authenticateWithOTP(phoneNumber as string, otpString);
 
@@ -94,13 +150,7 @@ export default function VerifyScreen() {
         await requestPushToken();
 
         // Show success toast
-        Toast.show({
-          type: 'success',
-          text1: 'Đăng nhập thành công!',
-          text2: 'Chào mừng bạn đến với Car Maintenance Services',
-          position: 'top',
-          visibilityTime: 3000,
-        });
+        toast.success('Đăng nhập thành công! Chào mừng bạn đến với Car Maintenance Services');
 
         // Navigate to main app (tabs) after a short delay to show toast
         setTimeout(() => {
@@ -129,12 +179,7 @@ export default function VerifyScreen() {
         setTimeLeft(60);
         setOtp(['', '', '', '', '', '']);
 
-        Toast.show({
-          type: 'info',
-          text1: 'Mã OTP mới đã được gửi',
-          text2: 'Vui lòng kiểm tra tin nhắn',
-          position: 'top',
-        });
+        toast('Mã OTP mới đã được gửi. Vui lòng kiểm tra tin nhắn');
       } else {
         Alert.alert('Lỗi', result.message);
       }
