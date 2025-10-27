@@ -130,8 +130,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             // Interceptor will automatically add auth header to the logout request
             await firebaseAuthService.signOut();
 
-            // Clear AsyncStorage
-            await AsyncStorage.multiRemove(['accessToken', 'refreshToken', 'userRole']);
+            // Clear ALL persisted data (including chatConversationId, tokens, etc.)
+            try {
+                await AsyncStorage.clear();
+            } catch (e) {
+                // Fallback to explicit keys if clear fails
+                await AsyncStorage.multiRemove(['accessToken', 'refreshToken', 'userRole', 'chatConversationId']);
+            }
 
             // Clear state
             setIsAuthenticated(false);

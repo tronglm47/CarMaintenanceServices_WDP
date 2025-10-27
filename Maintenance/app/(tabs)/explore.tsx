@@ -1,27 +1,32 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useApiService } from '@/hooks/useApiService';
+import { router } from 'expo-router';
 
 export default function VehiclesScreen() {
-  const vehicles = [
-    { 
-      id: 1, 
-      name: 'Honda City', 
-      year: '2020', 
-      plate: 'MH-01-AB-1234',
-      image: 'https://via.placeholder.com/80x60/4A90E2/FFFFFF?text=H',
-      nextService: '2024-02-15'
-    },
-    { 
-      id: 2, 
-      name: 'Toyota Innova', 
-      year: '2019', 
-      plate: 'MH-02-CD-5678',
-      image: 'https://via.placeholder.com/80x60/FF4444/FFFFFF?text=T',
-      nextService: '2024-02-20'
-    },
-  ];
+  const api = useApiService();
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [vehicles, setVehicles] = useState<any[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const load = async () => {
+      setIsLoading(true);
+      try {
+        const res = await api.vehicles.getMyVehicles();
+        if (isMounted && res?.success) {
+          const list = (res.data as any[]) || [];
+          setVehicles(list);
+        }
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    };
+    load();
+    return () => { isMounted = false; };
+  }, []);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -33,22 +38,37 @@ export default function VehiclesScreen() {
       </View>
 
       <ScrollView style={styles.content}>
-        {vehicles.map((vehicle) => (
-          <TouchableOpacity key={vehicle.id} style={styles.vehicleItem}>
+        {isLoading && (
+          <View style={styles.centered}> 
+            <ActivityIndicator size="small" color="#4A90E2" />
+          </View>
+        )}
+        {!isLoading && vehicles.length === 0 && (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="car-outline" size={48} color="#999" />
+            <Text style={styles.emptyText}>Chưa có xe nào</Text>
+          </View>
+        )}
+        {!isLoading && vehicles.map((vehicle: any, index: number) => (
+          <TouchableOpacity
+            key={(vehicle?.id || vehicle?._id || vehicle?.vehicleId || vehicle?.vin || index).toString()}
+            style={styles.vehicleItem}
+            onPress={() => router.push({ pathname: '/vehicle-details', params: { id: (vehicle?._id || vehicle?.id || '').toString() } })}
+          >
             <View style={styles.vehicleLeft}>
-              <Image source={{ uri: vehicle.image }} style={styles.vehicleImage} />
+              <Image source={{ uri: vehicle.image || 'https://via.placeholder.com/80x60/4A90E2/FFFFFF?text=V' }} style={styles.vehicleImage} />
               <View style={styles.vehicleInfo}>
-                <Text style={styles.vehicleName}>{vehicle.name}</Text>
-                <Text style={styles.vehicleYear}>{vehicle.year}</Text>
-                <Text style={styles.vehiclePlate}>{vehicle.plate}</Text>
+                <Text style={styles.vehicleName}>{vehicle.name || vehicle.model || 'Vehicle'}</Text>
+                <Text style={styles.vehicleYear}>{vehicle.year || vehicle.manufactureYear || ''}</Text>
+                <Text style={styles.vehiclePlate}>{vehicle.plate || vehicle.licensePlate || ''}</Text>
               </View>
             </View>
             <View style={styles.vehicleRight}>
               <View style={styles.nextServiceContainer}>
                 <Text style={styles.nextServiceLabel}>Next Service</Text>
-                <Text style={styles.nextServiceDate}>{vehicle.nextService}</Text>
+                <Text style={styles.nextServiceDate}>{vehicle.nextService || '-'}</Text>
               </View>
-              <TouchableOpacity style={styles.serviceButton}>
+              <TouchableOpacity style={styles.serviceButton} onPress={() => router.push({ pathname: '/book-appointment', params: { vehicleId: (vehicle?._id || vehicle?.id || '').toString() } })}>
                 <Text style={styles.serviceButtonText}>Book Service</Text>
               </TouchableOpacity>
             </View>

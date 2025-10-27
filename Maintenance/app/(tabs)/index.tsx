@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -14,11 +14,86 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
+import { useApiService } from '@/hooks/useApiService';
 
 const { width } = Dimensions.get('window');
 
 export default function HomeScreen() {
   const { logout } = useAuth();
+  const apiService = useApiService();
+  const [displayName, setDisplayName] = useState<string>('');
+  const [address, setAddress] = useState<string>('');
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadProfile = async () => {
+      try {
+        const res = await apiService.auth.getProfile();
+        console.log('🔎 Profile response:', JSON.stringify(res, null, 2));
+        if (res?.success && isMounted) {
+          const raw = res.data as any;
+          const candidateSources = [
+            raw,
+            raw?.data,
+            raw?.profile,
+            raw?.user,
+          ];
+
+          let name: string = '';
+          let userId: string | undefined;
+          let addr: string | undefined;
+          for (const src of candidateSources) {
+            if (!src) continue;
+            const candidate =
+              src.fullName ||
+              src.name ||
+              src.username ||
+              src.userName ||
+              src.displayName ||
+              src.customerName ||
+              src.firstName ||
+              src.email;
+            if (typeof candidate === 'string' && candidate.trim()) {
+              name = candidate.trim();
+            }
+
+            const possUserId = src.userId || src._id || src.id;
+            if (!userId && typeof possUserId === 'string') {
+              userId = possUserId;
+            }
+
+            const addrCandidate = src.address || src.location || src.city;
+            if (!addr && typeof addrCandidate === 'string' && addrCandidate.trim()) {
+              addr = addrCandidate.trim();
+            }
+          }
+
+          setDisplayName(name);
+
+          // Prefer address from profile if present
+          if (addr) {
+            setAddress(addr);
+          } else if (userId) {
+            try {
+              const cust = await apiService.raw.get(`/customers/user/${userId}`);
+              if (cust?.success) {
+                const c = (cust.data as any) || {};
+                if (typeof c.address === 'string') setAddress(c.address);
+              }
+            } catch (e) {
+              // ignore
+            }
+          }
+        }
+      } catch (e) {
+        // Silently ignore; greeting will fallback
+      }
+    };
+    loadProfile();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleLogout = async () => {
     Alert.alert(
@@ -70,9 +145,9 @@ export default function HomeScreen() {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <Text style={styles.greeting}>Hello Huy</Text>
+            <Text style={styles.greeting}>Hello {displayName || '...'}</Text>
             <View style={styles.locationContainer}>
-              <Text style={styles.location}>Mumbai, Maharashtra</Text>
+              <Text style={styles.location} numberOfLines={1} ellipsizeMode="tail">{address || '...'}</Text>
               <Ionicons name="chevron-down" size={16} color="#666" />
             </View>
           </View>

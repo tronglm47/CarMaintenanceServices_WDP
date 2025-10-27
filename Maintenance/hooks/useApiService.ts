@@ -35,6 +35,7 @@ export const useApiService = () => {
             update: (id: string, data: any) => api.put(`/vehicles/${id}`, data),
             delete: (id: string) => api.delete(`/vehicles/${id}`),
             getByCustomer: (customerId: string) => api.get(`/vehicles/customer/${customerId}`),
+            getMyVehicles: () => api.get('/vehicles/my-vehicles'),
         },
 
         // Service packages endpoints

@@ -91,6 +91,8 @@ function AppNavigator({ colorScheme }: { colorScheme: ColorSchemeName }) {
           <Stack.Screen name="tracking" options={{ headerShown: false }} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="chat" options={{ headerShown: false }} />
+          <Stack.Screen name="book-appointment" options={{ headerShown: false }} />
+          <Stack.Screen name="vehicle-details" options={{ headerShown: false }} />
           <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
         </Stack>
         <StatusBar style="auto" />
