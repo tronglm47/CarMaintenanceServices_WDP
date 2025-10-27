@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { getConversation, sendMessage } from '@/apis/chat.api';
@@ -15,6 +16,7 @@ interface ChatMessageItem {
 }
 
 export default function ChatScreen() {
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ conversationId?: string }>();
   const { get: apiGet } = useAxios();
   const { user } = useAuth();
@@ -87,9 +89,16 @@ export default function ChatScreen() {
     );
   };
 
+  const keyboardVerticalOffset = Platform.select({ ios: insets.top, android: 0 }) || 0;
+
   return (
     <SafeAreaView style={styles.safeArea}>
-      <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={keyboardVerticalOffset}
+        enabled
+      >
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Chat Support</Text>
           <Ionicons name="shield-checkmark" size={18} color="#fff" />
@@ -110,7 +119,7 @@ export default function ChatScreen() {
           />
         )}
 
-        <View style={styles.inputBar}>
+        <View style={[styles.inputBar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
           <TextInput
             style={styles.input}
             placeholder="Nhập tin nhắn..."

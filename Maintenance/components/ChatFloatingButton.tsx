@@ -2,6 +2,7 @@ import React from 'react';
 import { TouchableOpacity, StyleSheet, View, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, usePathname } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface ChatFloatingButtonProps {
   conversationId?: string | null;
@@ -9,9 +10,10 @@ interface ChatFloatingButtonProps {
 
 const ChatFloatingButton: React.FC<ChatFloatingButtonProps> = ({ conversationId }) => {
   const pathname = usePathname();
-  const isOnChatScreen = pathname === '/chat';
+  const insets = useSafeAreaInsets();
+  const isHomeScreen = pathname === '/(tabs)' || pathname === '/(tabs)/index' || pathname === '/';
 
-  if (isOnChatScreen) return null;
+  if (!isHomeScreen) return null;
 
   const onPress = () => {
     router.push({
@@ -20,8 +22,13 @@ const ChatFloatingButton: React.FC<ChatFloatingButtonProps> = ({ conversationId 
     });
   };
 
+  // Always keep the button well above any bottom elements (e.g., tab bar)
+  // Using a fixed clearance avoids pathname-based mismatches
+  const FIXED_CLEARANCE = 90; // px above the bottom edge (includes typical tab bar height + margin)
+  const bottomOffset = insets.bottom + FIXED_CLEARANCE;
+
   return (
-    <View pointerEvents="box-none" style={styles.container}>
+    <View pointerEvents="box-none" style={[styles.container, { bottom: bottomOffset }]}>
       <TouchableOpacity style={styles.button} onPress={onPress} activeOpacity={0.85}>
         <Ionicons name="chatbubbles" size={24} color="#fff" />
         <Text style={styles.text}>Chat</Text>
