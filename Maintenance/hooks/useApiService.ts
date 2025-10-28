@@ -48,7 +48,7 @@ export const useApiService = () => {
             delete: (id: string) => api.delete(`/service-packages/${id}`),
         },
 
-        // Subscriptions endpoints
+        // Subscriptions endpoints (generic)
         subscriptions: {
             getAll: (params?: any) => api.get('/subscriptions', { params }),
             getById: (id: string) => api.get(`/subscriptions/${id}`),
@@ -58,6 +58,19 @@ export const useApiService = () => {
             create: (data: any) => api.post('/subscriptions', data),
             update: (id: string, data: any) => api.put(`/subscriptions/${id}`, data),
             delete: (id: string) => api.delete(`/subscriptions/${id}`),
+        },
+
+        // Vehicle subscriptions endpoints (as per backend path)
+        vehicleSubscriptions: {
+            create: (data: any) => api.post('/vehicle-subscriptions', data),
+            getById: (id: string) => api.get(`/vehicle-subscriptions/${id}`),
+        },
+
+        // Payments endpoints
+        payments: {
+            getAll: (params?: any) => api.get('/payments', { params }),
+            create: (data: any) => api.post('/payments', data),
+            getById: (id: string) => api.get(`/payments/${id}`),
         },
 
         // Alerts endpoints
