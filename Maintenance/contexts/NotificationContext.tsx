@@ -97,8 +97,15 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
                 // Handle the notification response here
                 const data = response.notification.request.content.data;
 
-                if (data.type && data.type === "alert") {
-                    // Navigate to home screen (tabs index)
+                // If notification is an alert, go to tabs index
+                if (data?.type && data.type === "alert") {
+                    router.replace("/(tabs)");
+                }
+
+                // If notification is a push (chat), open the chat screen
+                if (data?.type && data.type === "push") {
+                    // Assumption: chat screen is at '/(tabs)/chat'.
+                    // If your chat route differs, replace this path accordingly.
                     router.replace("/(tabs)");
                 }
             });
@@ -114,9 +121,13 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
             );
             const data = response.notification.request.content.data;
 
-            if (data.type && data.type === "alert") {
-                // Navigate to home screen (tabs index)
+            if (data?.type && data.type === "alert") {
                 router.replace("/(tabs)");
+            }
+
+            if (data?.type && data.type === "push") {
+                // Assumption: chat screen is at '/(tabs)/chat'.
+                router.replace("/(tabs)/chat" as any);
             }
         });
 

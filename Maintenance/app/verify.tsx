@@ -43,40 +43,40 @@ export default function VerifyScreen() {
       });
     }, 1000);
 
-    // Listen for Firebase auth state changes because some Android versions
-    // auto-retrieve SMS verification and sign the user in in the background.
-    // If that happens, proceed to exchange the ID token with the backend
-    // so the user is fully logged into the app without showing an expired OTP message.
-    const unsubscribeAuth = auth().onAuthStateChanged(async (user) => {
-      if (!user) return;
-      if (isProcessingAuth) return;
+    // // Listen for Firebase auth state changes because some Android versions
+    // // auto-retrieve SMS verification and sign the user in in the background.
+    // // If that happens, proceed to exchange the ID token with the backend
+    // // so the user is fully logged into the app without showing an expired OTP message.
+    // const unsubscribeAuth = auth().onAuthStateChanged(async (user) => {
+    //   if (!user) return;
+    //   if (isProcessingAuth) return;
 
-      setIsProcessingAuth(true);
-      setIsLoading(true);
+    //   setIsProcessingAuth(true);
+    //   setIsLoading(true);
 
-      try {
-        const idToken = await user.getIdToken();
-        const backendResult = await firebaseAuthService.sendTokenToBackend(idToken, phoneNumber as string);
+    //   try {
+    //     const idToken = await user.getIdToken();
+    //     const backendResult = await firebaseAuthService.sendTokenToBackend(idToken, phoneNumber as string);
 
-        if (backendResult.success && backendResult.data) {
-          await login(backendResult.data.accessToken, backendResult.data.refreshToken, backendResult.data.role);
-          await requestPushToken();
+    //     if (backendResult.success && backendResult.data) {
+    //       await login(backendResult.data.accessToken, backendResult.data.refreshToken, backendResult.data.role);
+    //       await requestPushToken();
+    //       console.log('1111')
+    //       toast.success('Đăng nhập thành công! Chào mừng bạn đến với Car Maintenance Services');
 
-          toast.success('Đăng nhập thành công! Chào mừng bạn đến với Car Maintenance Services');
-
-          router.replace('/(tabs)');
-        }
-      } catch (e) {
-        console.error('Error handling auto sign-in:', e);
-      } finally {
-        setIsProcessingAuth(false);
-        setIsLoading(false);
-      }
-    });
+    //       router.replace('/(tabs)');
+    //     }
+    //   } catch (e) {
+    //     console.error('Error handling auto sign-in:', e);
+    //   } finally {
+    //     setIsProcessingAuth(false);
+    //     setIsLoading(false);
+    //   }
+    // });
 
     return () => {
       clearInterval(timer);
-      unsubscribeAuth();
+      // unsubscribeAuth();
     };
   }, []);
 
@@ -121,7 +121,7 @@ export default function VerifyScreen() {
         if (backendResult.success && backendResult.data) {
           await login(backendResult.data.accessToken, backendResult.data.refreshToken, backendResult.data.role);
           await requestPushToken();
-
+          console.log('1112')
           toast.success('Đăng nhập thành công! Chào mừng bạn đến với Car Maintenance Services');
 
           setTimeout(() => router.replace('/(tabs)'), 1500);

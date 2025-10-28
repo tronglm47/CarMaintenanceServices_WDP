@@ -5,6 +5,7 @@ import axios, {
     InternalAxiosRequestConfig,
 } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { DeviceEventEmitter } from 'react-native';
 
 interface CustomAxiosRequestConfig extends InternalAxiosRequestConfig {
     _retry?: boolean;
@@ -12,7 +13,7 @@ interface CustomAxiosRequestConfig extends InternalAxiosRequestConfig {
 
 interface AuthTokens {
     accessToken: string;
-    refreshToken: string;
+    refreshToken?: string | null;
 }
 
 interface RefreshTokenResponse {
@@ -32,7 +33,7 @@ class AxiosService {
 
     constructor() {
         const baseURL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://ev-maintenance-9bd58b96744e.herokuapp.com/api'
-console.log('baseURL', baseURL);
+        console.log('baseURL', baseURL);
         this.instance = axios.create({
             baseURL,
             timeout: 30000,
@@ -170,13 +171,29 @@ console.log('baseURL', baseURL);
             if (response.data.success && response.data.data) {
                 const { accessToken, refreshToken: newRefreshToken } = response.data.data;
 
-                // Update stored tokens
-                await AsyncStorage.setItem('accessToken', accessToken);
-                await AsyncStorage.setItem('refreshToken', newRefreshToken);
+                // Update stored tokens (guard against undefined/null values)
+                if (accessToken != null) {
+                    await AsyncStorage.setItem('accessToken', accessToken);
+                }
+
+                // If backend rotated refresh token return it, otherwise keep the existing one.
+                if (newRefreshToken != null) {
+                    await AsyncStorage.setItem('refreshToken', newRefreshToken);
+                } // else: do nothing and keep old refresh token stored locally
+
+                // Determine the effective refresh token to report to listeners/return value
+                const effectiveRefreshToken = newRefreshToken != null ? newRefreshToken : refreshToken;
+
+                // Notify in-app listeners (socket service) that tokens changed
+                try {
+                    DeviceEventEmitter.emit('ev_tokens_changed', { accessToken, refreshToken: effectiveRefreshToken ?? null });
+                } catch (e) {
+                    // ignore
+                }
 
                 return {
                     accessToken,
-                    refreshToken: newRefreshToken,
+                    refreshToken: effectiveRefreshToken ?? null,
                 };
             }
 
@@ -197,6 +214,9 @@ console.log('baseURL', baseURL);
 
     private async clearAuth() {
         await AsyncStorage.multiRemove(['accessToken', 'refreshToken', 'userRole']);
+        try {
+            DeviceEventEmitter.emit('ev_tokens_changed', null);
+        } catch (e) { }
     }
 
     public getAxiosInstance(): AxiosInstance {
