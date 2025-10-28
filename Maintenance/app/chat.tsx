@@ -4,7 +4,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { getConversation, sendMessage, waitForMessages } from '@/apis/chat.api';
+import { getConversation, sendMessage /* waitForMessages */ } from '@/apis/chat.api';
+import chatSocket from '@/services/chatSocket';
 import { useAxios } from '@/hooks/useAxios';
 import { useAuth } from '@/contexts/AuthContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -34,6 +35,7 @@ export default function ChatScreen() {
   const conversationIdParam = useMemo(() => (params?.conversationId as string) || '', [params]);
   const [conversationId, setConversationId] = useState<string>(conversationIdParam);
   const [knownIds, setKnownIds] = useState<Set<string>>(new Set());
+  const pendingTemps = useRef<Map<string, string>>(new Map());
   // Helpers to resolve IDs robustly
   const extractUserId = (obj: any): string | undefined => {
     if (!obj || typeof obj !== 'object') return undefined;
@@ -73,7 +75,7 @@ export default function ChatScreen() {
           return id;
         }
       }
-    } catch {}
+    } catch { }
     finally { setResolvingId(false); }
     return null;
   };
@@ -123,52 +125,79 @@ export default function ChatScreen() {
       try {
         const saved = await AsyncStorage.getItem('chatConversationId');
         if (saved) setConversationId(saved);
-      } catch {}
+      } catch { }
     };
     loadSavedConv();
   }, []);
 
   // Long-polling for new messages
   useEffect(() => {
-    let isActive = true;
-    let polling = false;
-    const poll = async () => {
-      if (polling) return; // avoid overlap
-      polling = true;
+    // Realtime via socket: subscribe to message:new events for current conversation
+    let mounted = true;
+
+    const onMessageNew = (msg: any) => {
+      if (!mounted) return;
+      if (!msg) return;
+      const mid = msg._id || msg.id || msg.id || `srv-${Date.now()}`;
+      if (knownIds.has(mid)) return;
+      // If we have a pending optimistic message with same content, replace it instead of appending
+      const msgContent = msg.content || msg.message || msg.text || '';
+      // find a temp id whose content matches and is pending
+      const existingTempEntry = Array.from(pendingTemps.current.entries()).find(([_tempId, tempContent]) => tempContent === msgContent);
+      if (existingTempEntry) {
+        const [tempId] = existingTempEntry;
+        // replace temp message in list with server message
+        setMessages(prev => prev.map(m => m._id === tempId ? ({
+          _id: mid,
+          content: msgContent,
+          createdAt: msg.createdAt || new Date().toISOString(),
+          sender: msg.sender || msg.senderId || undefined,
+          senderRole: msg.senderRole || msg.role || null,
+          systemMessageType: msg.systemMessageType || null,
+        }) : m));
+        setKnownIds(prev => {
+          const next = new Set(prev);
+          next.add(mid);
+          return next;
+        });
+        pendingTemps.current.delete(tempId);
+        return;
+      }
+      const mapped = {
+        _id: mid,
+        content: msg.content || msg.message || msg.text || '',
+        createdAt: msg.createdAt || new Date().toISOString(),
+        sender: msg.sender || msg.senderId || undefined,
+        senderRole: msg.senderRole || msg.role || null,
+        systemMessageType: msg.systemMessageType || null,
+      };
+      setMessages(prev => [...prev, mapped]);
+      setKnownIds(prev => {
+        const next = new Set(prev);
+        next.add(mid);
+        return next;
+      });
+    };
+
+    const start = async () => {
+      if (!conversationId) return;
       try {
-        if (!conversationId) return;
-        const res = await waitForMessages();
-        if (!isActive || !res?.success) return;
-        const newMessages = (res.data?.messages as any[]) || [];
-        if (newMessages.length) {
-          setMessages(prev => [
-            ...prev,
-            ...newMessages
-              .filter((m) => !knownIds.has(m._id))
-              .map((m, idx) => ({
-                _id: m._id || `srv-${Date.now()}-${idx}`,
-                content: m.content || m.message || '',
-                createdAt: m.createdAt || new Date().toISOString(),
-                sender: m.sender,
-                senderRole: m.senderRole || m.role || null,
-                systemMessageType: m.systemMessageType || null,
-              })),
-          ]);
-          setKnownIds(prev => {
-            const next = new Set(prev);
-            newMessages.forEach((m: any) => m?._id && next.add(m._id));
-            return next;
-          });
-        }
+        await chatSocket.joinConversation(conversationId);
+        chatSocket.on('message:new', onMessageNew as any);
       } catch (e) {
-        // ignore network timeouts
-      } finally {
-        polling = false;
-        if (isActive) setTimeout(poll, 400); // small delay to prevent tight loop
+        console.warn('chat socket subscribe failed', e);
       }
     };
-    poll();
-    return () => { isActive = false; };
+
+    start();
+
+    return () => {
+      mounted = false;
+      try {
+        chatSocket.off('message:new', onMessageNew as any);
+        if (conversationId) chatSocket.leaveConversation(conversationId);
+      } catch { }
+    };
   }, [conversationId, knownIds]);
 
   const handleSend = async () => {
@@ -188,14 +217,36 @@ export default function ChatScreen() {
       sender: user ? { id: user.uid } : undefined,
     };
     setMessages(prev => [...prev, optimistic]);
+    // Track pending optimistic message content so incoming socket messages can match and replace it
+    pendingTemps.current.set(optimistic._id, input);
     const toSend = input;
     setInput('');
     try {
       const res = await sendMessage({ customerId: idToUse as string, content: toSend });
-      const convIdFromSend: string | undefined = res?.data?.conversation?._id || res?.data?.message?.conversationId;
+      const returnedMessage = res?.data?.message || res?.data?.data || null;
+      const returnedId: string | undefined = returnedMessage?._id || returnedMessage?.id;
+      const convIdFromSend: string | undefined = res?.data?.conversation?._id || returnedMessage?.conversationId;
+      if (returnedId) {
+        // map any temp messages with same content to returned id to avoid duplicates
+        setMessages(prev => prev.map(m => m._id.startsWith('temp-') && m.content === toSend ? ({
+          ...m,
+          _id: returnedId,
+          createdAt: returnedMessage?.createdAt || m.createdAt,
+          sender: returnedMessage?.sender || m.sender,
+        }) : m));
+        setKnownIds(prev => {
+          const next = new Set(prev);
+          next.add(returnedId);
+          return next;
+        });
+        // clear pending temp entries for this content
+        for (const [tempId, content] of Array.from(pendingTemps.current.entries())) {
+          if (content === toSend) pendingTemps.current.delete(tempId);
+        }
+      }
       if (convIdFromSend && !conversationId) {
         setConversationId(convIdFromSend);
-        try { await AsyncStorage.setItem('chatConversationId', convIdFromSend); } catch {}
+        try { await AsyncStorage.setItem('chatConversationId', convIdFromSend); } catch { }
       }
     } catch (e) {
       // Rollback if needed
@@ -239,7 +290,7 @@ export default function ChatScreen() {
         </View>
 
         {loading ? (
-          <View style={styles.loader}> 
+          <View style={styles.loader}>
             <ActivityIndicator size="large" color="#1E3A8A" />
           </View>
         ) : (

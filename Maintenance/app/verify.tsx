@@ -61,7 +61,7 @@ export default function VerifyScreen() {
         if (backendResult.success && backendResult.data) {
           await login(backendResult.data.accessToken, backendResult.data.refreshToken, backendResult.data.role);
           await requestPushToken();
-
+          console.log('1111')
           toast.success('Đăng nhập thành công! Chào mừng bạn đến với Car Maintenance Services');
 
           router.replace('/(tabs)');
@@ -121,7 +121,7 @@ export default function VerifyScreen() {
         if (backendResult.success && backendResult.data) {
           await login(backendResult.data.accessToken, backendResult.data.refreshToken, backendResult.data.role);
           await requestPushToken();
-
+          console.log('1112')
           toast.success('Đăng nhập thành công! Chào mừng bạn đến với Car Maintenance Services');
 
           setTimeout(() => router.replace('/(tabs)'), 1500);

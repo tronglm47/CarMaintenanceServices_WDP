@@ -5,6 +5,7 @@ import axios, {
     InternalAxiosRequestConfig,
 } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { DeviceEventEmitter } from 'react-native';
 
 interface CustomAxiosRequestConfig extends InternalAxiosRequestConfig {
     _retry?: boolean;
@@ -32,7 +33,7 @@ class AxiosService {
 
     constructor() {
         const baseURL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://ev-maintenance-9bd58b96744e.herokuapp.com/api'
-console.log('baseURL', baseURL);
+        console.log('baseURL', baseURL);
         this.instance = axios.create({
             baseURL,
             timeout: 30000,
@@ -174,6 +175,13 @@ console.log('baseURL', baseURL);
                 await AsyncStorage.setItem('accessToken', accessToken);
                 await AsyncStorage.setItem('refreshToken', newRefreshToken);
 
+                // Notify in-app listeners (socket service) that tokens changed
+                try {
+                    DeviceEventEmitter.emit('ev_tokens_changed', { accessToken, refreshToken: newRefreshToken });
+                } catch (e) {
+                    // ignore
+                }
+
                 return {
                     accessToken,
                     refreshToken: newRefreshToken,
@@ -197,6 +205,9 @@ console.log('baseURL', baseURL);
 
     private async clearAuth() {
         await AsyncStorage.multiRemove(['accessToken', 'refreshToken', 'userRole']);
+        try {
+            DeviceEventEmitter.emit('ev_tokens_changed', null);
+        } catch (e) { }
     }
 
     public getAxiosInstance(): AxiosInstance {

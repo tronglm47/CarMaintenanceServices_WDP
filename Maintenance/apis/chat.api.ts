@@ -53,10 +53,5 @@ export interface WaitingResponse<TMessage = any> {
   };
 }
 
-// Long-polling endpoint to wait for new messages
-export async function waitForMessages() {
-  const res = await axiosService.get<WaitingResponse>("/chat/waiting", { timeout: 60000 });
-  return res.data;
-}
 
 
