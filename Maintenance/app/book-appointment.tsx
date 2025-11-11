@@ -1,35 +1,37 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Alert, Modal, Pressable } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Alert, Modal, Pressable, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { listCenters, createAppointment } from '@/apis/appointments.api';
 import { useAxios } from '@/hooks/useAxios';
+import { useApiService } from '@/hooks/useApiService';
 
-interface CenterItem { _id: string; name?: string; address?: string }
+interface CenterItem { _id: string; name?: string; address?: string; image?: string }
 
 export default function BookAppointmentScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ vehicleId?: string }>();
   const vehicleId = useMemo(() => (params?.vehicleId as string) || '', [params]);
   const api = useAxios();
+  const apiService = useApiService();
 
   const [centers, setCenters] = useState<CenterItem[]>([]);
   const [centerId, setCenterId] = useState<string>('');
-  const [startTime, setStartTime] = useState<string>('');
-  const [endTime, setEndTime] = useState<string>('');
+  const [selectedDate, setSelectedDate] = useState<string>(''); // YYYY-MM-DD
+  const [slots, setSlots] = useState<any[]>([]);
+  const [slotId, setSlotId] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [showPicker, setShowPicker] = useState<'date' | 'time' | null>(null);
+  const [showPicker, setShowPicker] = useState<'date' | 'slot' | null>(null);
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       try {
-        const res = await listCenters();
-        const payload: any = res?.data ?? res;
-        const arr: any[] = Array.isArray(payload) ? payload : (Array.isArray(payload?.data) ? payload.data : (Array.isArray(payload?.centers) ? payload.centers : []));
-        const normalized: CenterItem[] = arr.map((c: any) => ({ _id: c._id || c.id, name: c.name || c.centerName || 'Center', address: c.address }));
+        const res = await apiService.centers.getAll();
+        const payload: any = (res as any)?.data ?? res;
+        const arr: any[] = Array.isArray(payload?.centers) ? payload.centers : (Array.isArray(payload) ? payload : []);
+        const normalized: CenterItem[] = arr.map((c: any) => ({ _id: c._id || c.id, name: c.name || c.centerName || 'Center', address: c.address, image: c.image }));
         setCenters(normalized);
         if (normalized.length) setCenterId(normalized[0]._id);
       } finally {
@@ -39,40 +41,44 @@ export default function BookAppointmentScreen() {
     load();
   }, []);
 
+  // fetch slots when date or center change
+  useEffect(() => {
+    const fetchSlots = async () => {
+      if (!selectedDate || !centerId) return;
+      try {
+        const res = await apiService.slots.getAll({ date: selectedDate, center_id: centerId });
+        const payload: any = (res as any)?.data ?? res;
+        const list: any[] = Array.isArray(payload?.data) ? payload.data : (Array.isArray(payload?.slots) ? payload.slots : (Array.isArray(payload) ? payload : []));
+        setSlots(list);
+      } catch {}
+    };
+    fetchSlots();
+  }, [selectedDate, centerId]);
+
   const handleSubmit = async () => {
-    if (!centerId || !vehicleId || !startTime || !endTime) {
-      Alert.alert('Thiếu thông tin', 'Vui lòng chọn trung tâm và thời gian');
+    if (!centerId || !vehicleId || !slotId) {
+      Alert.alert('Thiếu thông tin', 'Vui lòng chọn trung tâm, ngày và slot');
       return;
     }
-    // Validate start < end
-    try {
-      const s = new Date(startTime).getTime();
-      const e = new Date(endTime).getTime();
-      if (!(e > s)) {
-        Alert.alert('Thời gian không hợp lệ', 'Giờ kết thúc phải sau giờ bắt đầu');
-        return;
-      }
-    } catch {}
     try {
       setSaving(true);
-      // Resolve customer_id from profile
+      // Resolve customer_id from profile (customer document _id)
       const profile = await api.get('/auth/profile');
-      const data: any = profile.data || {};
-      const customerId = (data._id || data.data?._id) as string;
-      const body = {
-        customer_id: customerId,
-        vehicle_id: vehicleId,
-        center_id: centerId,
-        startTime,
-        endTime,
-      };
-      const res = await createAppointment(body);
-      if (res?.success !== false) {
-        Alert.alert('Thành công', 'Đặt lịch hẹn thành công');
-        router.back();
-      } else {
-        Alert.alert('Thất bại', res?.message || 'Không thể đặt lịch');
+      const raw: any = profile || {};
+      const payload = raw?.data ?? raw;
+      const customerId: string | undefined =
+        (typeof payload?._id === 'string' ? payload._id : undefined) ||
+        payload?.customer_id ||
+        payload?.customerId ||
+        payload?.customer?._id;
+      if (!customerId) {
+        Alert.alert('Thiếu thông tin', 'Không xác định được customer_id'); 
+        return;
       }
+      const body = { customer_id: customerId, vehicle_id: vehicleId, center_id: centerId, slot_id: slotId };
+      const res = await apiService.raw.post('/appointments', body);
+      if (res?.success === false) throw new Error(res?.message || 'Không thể đặt lịch');
+      router.replace('/booking-success');
     } catch (e: any) {
       Alert.alert('Lỗi', e?.message || 'Không thể đặt lịch');
     } finally {
@@ -92,24 +98,28 @@ export default function BookAppointmentScreen() {
         </View>
       ) : (
         <View style={styles.content}>
-          <Text style={styles.label}>Chọn trung tâm</Text>
-          <View style={styles.pillRow}>
+          <Text style={styles.label}>Select center</Text>
+          <View style={styles.centerList}>
             {centers.map((c) => (
-              <TouchableOpacity key={c._id} style={[styles.pill, centerId === c._id && styles.pillActive]} onPress={() => setCenterId(c._id)}>
-                <Text style={[styles.pillText, centerId === c._id && styles.pillTextActive]}>{c.name}</Text>
+              <TouchableOpacity key={c._id} style={[styles.centerItem, centerId === c._id && styles.centerItemActive]} onPress={() => setCenterId(c._id)}>
+                <Image source={{ uri: c.image || 'https://via.placeholder.com/48x48?text=C' }} style={styles.centerImage} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.centerName, centerId === c._id && { color: '#fff' }]} numberOfLines={1}>{c.name}</Text>
+                  {!!c.address && <Text style={[styles.centerAddr, centerId === c._id && { color: '#E5E7EB' }]} numberOfLines={1}>{c.address}</Text>}
+                </View>
               </TouchableOpacity>
             ))}
           </View>
 
-          <Text style={styles.label}>Chọn ngày & giờ</Text>
+          <Text style={styles.label}>Select date & time</Text>
           <View style={styles.timeRow}>
             <TouchableOpacity style={styles.segment} onPress={() => setShowPicker('date')}>
               <Text style={styles.segmentTitle}>Date</Text>
-              <Text style={styles.segmentValue}>{startTime ? new Date(startTime).toDateString() : 'Chọn ngày'}</Text>
+              <Text style={styles.segmentValue}>{selectedDate || 'Select date'}</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.segment} onPress={() => setShowPicker('time')}>
-              <Text style={styles.segmentTitle}>Time</Text>
-              <Text style={styles.segmentValue}>{startTime ? new Date(startTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : 'Chọn giờ'}</Text>
+            <TouchableOpacity style={styles.segment} onPress={() => setShowPicker('slot')}>
+              <Text style={styles.segmentTitle}>Slot</Text>
+              <Text style={styles.segmentValue}>{slotId ? (slots.find(s => (s._id || s.id) === slotId)?.start_time + ' - ' + (slots.find(s => (s._id || s.id) === slotId)?.end_time || '')) : 'Select slot'}</Text>
             </TouchableOpacity>
           </View>
 
@@ -118,23 +128,23 @@ export default function BookAppointmentScreen() {
               <View style={styles.modalCard}>
                 <View style={styles.modalTabs}>
                   <TouchableOpacity onPress={() => setShowPicker('date')} style={[styles.tabBtn, showPicker==='date' && styles.tabActive]}><Text style={[styles.tabText, showPicker==='date' && styles.tabTextActive]}>Date</Text></TouchableOpacity>
-                  <TouchableOpacity onPress={() => setShowPicker('time')} style={[styles.tabBtn, showPicker==='time' && styles.tabActive]}><Text style={[styles.tabText, showPicker==='time' && styles.tabTextActive]}>Time</Text></TouchableOpacity>
+                  <TouchableOpacity onPress={() => setShowPicker('slot')} style={[styles.tabBtn, showPicker==='slot' && styles.tabActive]}><Text style={[styles.tabText, showPicker==='slot' && styles.tabTextActive]}>Slot</Text></TouchableOpacity>
                   <Pressable onPress={() => setShowPicker(null)} style={{marginLeft:'auto'}}><Ionicons name="close" size={20} color="#111" /></Pressable>
                 </View>
                 {showPicker === 'date' ? (
-                  <DateGrid onSelect={(d) => { const base = startTime? new Date(startTime): new Date(); base.setFullYear(d.getFullYear(), d.getMonth(), d.getDate()); const end=new Date(base.getTime()+2*60*60*1000); setStartTime(base.toISOString()); setEndTime(end.toISOString()); }} />
+                  <DateGrid onSelect={(d) => { const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; setSelectedDate(iso); setShowPicker('slot'); }} />
                 ) : (
-                  <TimeGrid onSelect={(h,m) => { const base = startTime? new Date(startTime): new Date(); base.setHours(h,m,0,0); const end=new Date(base.getTime()+2*60*60*1000); setStartTime(base.toISOString()); setEndTime(end.toISOString()); }} />
+                  <SlotGrid slots={slots} selectedId={slotId} onSelect={(id) => setSlotId(id)} />
                 )}
                 <TouchableOpacity style={styles.checkoutBtn} onPress={() => setShowPicker(null)}>
-                  <Text style={styles.checkoutText}>Xong</Text>
+                  <Text style={styles.checkoutText}>Close</Text>
                 </TouchableOpacity>
               </View>
             </View>
           </Modal>
 
           <TouchableOpacity style={[styles.submitBtn, saving && { opacity: 0.7 }]} onPress={handleSubmit} disabled={saving}>
-            {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>Xác nhận đặt lịch</Text>}
+            {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>Book Now</Text>}
           </TouchableOpacity>
         </View>
       )}
@@ -157,6 +167,12 @@ const styles = StyleSheet.create({
   pillActive: { backgroundColor: '#1E3A8A', borderColor: '#1E3A8A' },
   pillText: { color: '#111827' },
   pillTextActive: { color: '#fff' },
+  centerList: { gap: 8 },
+  centerItem: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, padding: 10, gap: 10 },
+  centerItemActive: { backgroundColor: '#1E3A8A', borderColor: '#1E3A8A' },
+  centerImage: { width: 48, height: 48, borderRadius: 8 },
+  centerName: { color: '#111827', fontWeight: '700' },
+  centerAddr: { color: '#6B7280', fontSize: 12 },
   input: { borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 10, padding: 12 },
   submitBtn: { backgroundColor: '#1E3A8A', borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 20 },
   submitText: { color: '#fff', fontWeight: '700' },
@@ -217,19 +233,28 @@ function DateGrid({ onSelect }: { onSelect: (d: Date) => void }) {
   );
 }
 
-function TimeGrid({ onSelect }: { onSelect: (h: number, m: number) => void }) {
-  const slots = Array.from({ length: 12 }, (_, i) => 8 + i); // 8h -> 19h
+function SlotGrid({ slots, selectedId, onSelect }: { slots: any[]; selectedId?: string; onSelect: (id: string) => void }) {
   return (
     <View>
-      <Text style={{ fontWeight: '700', fontSize: 16, marginBottom: 8 }}>Chọn giờ</Text>
+      <Text style={{ fontWeight: '700', fontSize: 16, marginBottom: 8 }}>Chọn slot</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-        {slots.map((h) => (
-          <TouchableOpacity key={h} style={{ width: '25%', padding: 6 }} onPress={() => onSelect(h, 0)}>
-            <View style={{ paddingVertical: 10, borderRadius: 12, backgroundColor: '#F3F4F6', alignItems: 'center' }}>
-              <Text>{`${h.toString().padStart(2, '0')}:00`}</Text>
-            </View>
-          </TouchableOpacity>
-        ))}
+        {slots.map((s: any) => {
+          const id = s._id || s.id;
+          const label = `${s.start_time || ''} - ${s.end_time || ''}`.trim();
+          const isFull = typeof s.capacity === 'number' && typeof s.booked_count === 'number' && s.booked_count >= s.capacity;
+          const statusStr = String(s.status || '').toLowerCase();
+          const isInactive = (!!statusStr) && statusStr !== 'active';
+          const disabled = isFull || isInactive;
+          const selected = selectedId === id;
+          return (
+            <TouchableOpacity key={id} style={{ width: '33.33%', padding: 6 }} onPress={() => !disabled && onSelect(id)} disabled={disabled}>
+              <View style={{ paddingVertical: 10, borderRadius: 12, backgroundColor: selected ? '#EF4444' : (disabled ? '#E5E7EB' : '#F3F4F6'), alignItems: 'center' }}>
+                <Text style={{ color: selected ? '#fff' : (disabled ? '#9CA3AF' : '#111') }}>{label || '-'}</Text>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+        {(!slots || slots.length === 0) && <Text style={{ color: '#6B7280' }}>Vui lòng chọn ngày và trung tâm để xem slot</Text>}
       </View>
     </View>
   );

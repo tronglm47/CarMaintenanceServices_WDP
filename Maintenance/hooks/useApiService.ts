@@ -16,6 +16,10 @@ export const useApiService = () => {
 
             // Logout
             logout: () => api.post('/auth/logout', {}),
+
+            // Email/phone + password login
+            loginByPassword: (identifier: string, password: string) =>
+                api.post('/auth/login-by-password', { identifier, password }, { headers: { 'X-Skip-Auth': 'true' } }),
         },
 
         // User endpoints
@@ -64,6 +68,7 @@ export const useApiService = () => {
         vehicleSubscriptions: {
             create: (data: any) => api.post('/vehicle-subscriptions', data),
             getById: (id: string) => api.get(`/vehicle-subscriptions/${id}`),
+            getByVehicle: (vehicleId: string) => api.get(`/vehicle-subscriptions/vehicle/${vehicleId}`),
         },
 
         // Payments endpoints
@@ -71,6 +76,40 @@ export const useApiService = () => {
             getAll: (params?: any) => api.get('/payments', { params }),
             create: (data: any) => api.post('/payments', data),
             getById: (id: string) => api.get(`/payments/${id}`),
+            webhook: (data: any) => api.post('/payments/webhook', data),
+        },
+
+        // Auto parts endpoints
+        autoParts: {
+            getAll: (params?: any) => api.get('/auto-parts', { params }),
+            getById: (id: string) => api.get(`/auto-parts/${id}`),
+        },
+
+        // Centers endpoints
+        centers: {
+            getAll: (params?: any) => api.get('/centers', { params }),
+            getById: (id: string) => api.get(`/centers/${id}`),
+        },
+
+        // Slots endpoints
+        slots: {
+            getAll: (params?: { date?: string; center_id?: string }) => api.get('/slots', { params }),
+        },
+
+        // Appointments endpoints
+        appointments: {
+            getAll: (params?: any) => api.get('/appointments', { params }),
+            getById: (id: string) => api.get(`/appointments/${id}`),
+        },
+
+        // Service records endpoints
+        serviceRecords: {
+            getAll: (params?: any) => api.get('/service-records', { params }),
+        },
+
+        // Record checklists
+        recordChecklists: {
+            getByRecord: (recordId: string) => api.get(`/record-checklists/by-record/${recordId}`),
         },
 
         // Alerts endpoints

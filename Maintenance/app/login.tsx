@@ -15,10 +15,19 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import firebaseAuthService from '@/services/firebaseAuth';
 import RecaptchaContainer from '@/components/RecaptchaContainer';
+import { useApiService } from '@/hooks/useApiService';
+import { useAuth } from '@/contexts/AuthContext';
+import { useNotification } from '@/contexts/NotificationContext';
 
 export default function LoginScreen() {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [mode, setMode] = useState<'phone' | 'email'>('phone');
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
+  const api = useApiService();
+  const { login } = useAuth();
+  const { requestPushToken } = useNotification();
 
   const handleSendOTP = async () => {
     // Validate phone number
@@ -90,39 +99,127 @@ export default function LoginScreen() {
               <Text style={styles.subtitle}>Đăng nhập để tiếp tục</Text>
             </View>
 
-            {/* Phone Input */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Số điện thoại</Text>
-              <View style={styles.phoneInputWrapper}>
-                <View style={styles.countryCode}>
-                  <Text style={styles.countryCodeText}>+84</Text>
+            {mode === 'phone' ? (
+              <>
+                {/* Phone Input */}
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>Số điện thoại</Text>
+                  <View style={styles.phoneInputWrapper}>
+                    <View style={styles.countryCode}>
+                      <Text style={styles.countryCodeText}>+84</Text>
+                    </View>
+                    <TextInput
+                      style={styles.phoneInput}
+                      placeholder="0123 456 789"
+                      value={phoneNumber}
+                      onChangeText={(text) => setPhoneNumber(formatPhoneNumber(text))}
+                      keyboardType="phone-pad"
+                      maxLength={15}
+                      autoFocus
+                    />
+                  </View>
                 </View>
-                <TextInput
-                  style={styles.phoneInput}
-                  placeholder="0123 456 789"
-                  value={phoneNumber}
-                  onChangeText={(text) => setPhoneNumber(formatPhoneNumber(text))}
-                  keyboardType="phone-pad"
-                  maxLength={15}
-                  autoFocus
-                />
-              </View>
-            </View>
 
-            {/* Send OTP Button */}
-            <View style={styles.buttonContainer}>
-              <TouchableOpacity
-                style={[styles.sendButton, isLoading && styles.sendButtonDisabled]}
-                onPress={handleSendOTP}
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.sendButtonText}>Gửi mã OTP</Text>
-                )}
-              </TouchableOpacity>
-            </View>
+                {/* Send OTP Button */}
+                <View style={styles.buttonContainer}>
+                  <TouchableOpacity
+                    style={[styles.sendButton, isLoading && styles.sendButtonDisabled]}
+                    onPress={handleSendOTP}
+                    disabled={isLoading}
+                  >
+                    {isLoading ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={styles.sendButtonText}>Gửi mã OTP</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+
+                {/* Minimal toggle below primary button */}
+                <View style={styles.toggleRow}>
+                  <TouchableOpacity onPress={() => setMode('phone')} style={[styles.toggleBtn, mode === 'phone' && styles.toggleActive]}>
+                    <Ionicons name="call" size={16} color={mode === 'phone' ? '#fff' : '#374151'} />
+                    <Text style={[styles.toggleText, mode === 'phone' && styles.toggleTextActive]}>Số điện thoại</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => setMode('email')} style={[styles.toggleBtn, mode === 'email' && styles.toggleActive]}>
+                    <Ionicons name="mail" size={16} color={mode === 'email' ? '#fff' : '#374151'} />
+                    <Text style={[styles.toggleText, mode === 'email' && styles.toggleTextActive]}>Email</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <>
+                {/* Email/Password Input */}
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>Email</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder="you@example.com"
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    value={identifier}
+                    onChangeText={setIdentifier}
+                  />
+                </View>
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>Mật khẩu</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder="••••••••"
+                    secureTextEntry
+                    value={password}
+                    onChangeText={setPassword}
+                  />
+                </View>
+                <View style={styles.buttonContainer}>
+                  <TouchableOpacity
+                    style={[styles.sendButton, isLoading && styles.sendButtonDisabled]}
+                    onPress={async () => {
+                      if (!identifier || !password) {
+                        Alert.alert('Lỗi', 'Vui lòng nhập email và mật khẩu');
+                        return;
+                      }
+                      setIsLoading(true);
+                      try {
+                        const res = await api.auth.loginByPassword(identifier, password);
+                        const data: any = (res as any)?.data ?? res;
+                        const payload = data?.data ?? data;
+                        const access = payload?.accessToken || payload?.access_token || payload?.token;
+                        const refresh = payload?.refreshToken || payload?.refresh_token || payload?.refresh;
+                        const role = payload?.role || 'CUSTOMER';
+                        if (!access || !refresh) throw new Error(data?.message || 'Đăng nhập thất bại');
+                        await login(access, refresh, role);
+                        await requestPushToken();
+                        router.replace('/(tabs)');
+                      } catch (e: any) {
+                        Alert.alert('Lỗi', e?.message || 'Không thể đăng nhập');
+                      } finally {
+                        setIsLoading(false);
+                      }
+                    }}
+                    disabled={isLoading}
+                  >
+                    {isLoading ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={styles.sendButtonText}>Đăng nhập</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+
+                {/* Minimal toggle below primary button */}
+                <View style={styles.toggleRow}>
+                  <TouchableOpacity onPress={() => setMode('phone')} style={[styles.toggleBtn, mode === 'phone' && styles.toggleActive]}>
+                    <Ionicons name="call" size={16} color={mode === 'phone' ? '#fff' : '#374151'} />
+                    <Text style={[styles.toggleText, mode === 'phone' && styles.toggleTextActive]}>Số điện thoại</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => setMode('email')} style={[styles.toggleBtn, mode === 'email' && styles.toggleActive]}>
+                    <Ionicons name="mail" size={16} color={mode === 'email' ? '#fff' : '#374151'} />
+                    <Text style={[styles.toggleText, mode === 'email' && styles.toggleTextActive]}>Email</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
 
             {/* Footer */}
             <View style={styles.footer}>
@@ -213,6 +310,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
   },
+  textInput: {
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 12,
+    backgroundColor: '#F9F9F9',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: '#333',
+  },
   sendButton: {
     backgroundColor: '#4A90E2',
     paddingVertical: 16,
@@ -244,5 +351,61 @@ const styles = StyleSheet.create({
   linkText: {
     color: '#4A90E2',
     fontWeight: '600',
+  },
+  switchRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  switchBtn: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+    backgroundColor: '#F9F9F9',
+  },
+  switchBtnActive: {
+    backgroundColor: '#4A90E2',
+    borderColor: '#4A90E2',
+  },
+  switchText: {
+    color: '#374151',
+    fontWeight: '600',
+    fontSize: 12,
+  },
+  switchTextActive: {
+    color: '#FFFFFF',
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 10,
+    marginTop: 10,
+    marginBottom: 12,
+  },
+  toggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#F9FAFB',
+  },
+  toggleActive: {
+    backgroundColor: '#4A90E2',
+    borderColor: '#4A90E2',
+  },
+  toggleText: {
+    fontSize: 12,
+    color: '#374151',
+    fontWeight: '600',
+  },
+  toggleTextActive: {
+    color: '#FFFFFF',
   },
 });

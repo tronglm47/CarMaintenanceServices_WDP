@@ -32,9 +32,6 @@ export default function VehiclesScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>My Vehicles</Text>
-        <TouchableOpacity style={styles.addButton}>
-          <Ionicons name="add" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.content}>
@@ -108,6 +105,20 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: 20,
+  },
+  centered: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 24,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  emptyText: {
+    color: '#666',
+    marginTop: 8,
   },
   vehicleItem: {
     flexDirection: 'row',

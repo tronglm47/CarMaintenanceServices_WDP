@@ -59,8 +59,10 @@ class AxiosService {
         config: CustomAxiosRequestConfig
     ): Promise<CustomAxiosRequestConfig> {
         try {
+            // Allow certain requests to skip auth header by setting a custom header
+            const skipAuth = (config.headers as any)?.['X-Skip-Auth'] === 'true';
             // Get access token from AsyncStorage
-            const accessToken = await AsyncStorage.getItem('accessToken');
+            const accessToken = skipAuth ? null : await AsyncStorage.getItem('accessToken');
 
             if (accessToken) {
                 config.headers.Authorization = `Bearer ${accessToken}`;
@@ -98,7 +100,8 @@ class AxiosService {
         }
 
         // Handle 401 Unauthorized - Token expired or invalid
-        if (error.response?.status === 401 && !originalRequest._retry) {
+        const skipAuth = (originalRequest?.headers as any)?.['X-Skip-Auth'] === 'true';
+        if (error.response?.status === 401 && !originalRequest._retry && !skipAuth) {
             originalRequest._retry = true;
 
             if (!this.isRefreshing) {

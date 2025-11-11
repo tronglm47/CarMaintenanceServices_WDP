@@ -36,6 +36,8 @@ export default function HomeScreen() {
   const [userIdState, setUserIdState] = useState<string>('');
   const [paymentUrl, setPaymentUrl] = useState<string>('');
   const [showPaymentWeb, setShowPaymentWeb] = useState(false);
+  const [paymentOrderCode, setPaymentOrderCode] = useState<string>('');
+  const [autoParts, setAutoParts] = useState<any[]>([]);
   const WebViewComponent = useMemo(() => {
     try {
       const mod = require('react-native-webview');
@@ -149,6 +151,18 @@ export default function HomeScreen() {
       }
     };
     loadPackages();
+    // Load auto parts for selection grid
+    const loadParts = async () => {
+      try {
+        const res = await apiService.autoParts.getAll({ page: 1, limit: 12 });
+        if (isMounted && res?.success) {
+          const payload: any = (res as any).data || {};
+          const items = Array.isArray(payload?.parts) ? payload.parts : Array.isArray(payload) ? payload : [];
+          setAutoParts(items);
+        }
+      } catch {}
+    };
+    loadParts();
     // preload my vehicles (lazy on open as fallback)
     const preloadVehicles = async () => {
       try {
@@ -214,6 +228,10 @@ export default function HomeScreen() {
         console.log('Payments by subscription_id count =', items.length);
         const first = items[0];
         const url = first?.payment_url || first?.url || first?.redirectUrl;
+        try {
+          const oc = first?.order_code || first?.orderCode || first?.code;
+          if (typeof oc === 'number' || typeof oc === 'string') setPaymentOrderCode(String(oc));
+        } catch {}
         if (url) console.log('Found payment_url by subscription_id:', url);
         if (url) return url;
       } catch {}
@@ -236,6 +254,10 @@ export default function HomeScreen() {
           : items[0];
         console.log('Payments by customer_id count =', items.length);
         const url = candidate?.payment_url || candidate?.url || candidate?.redirectUrl;
+        try {
+          const oc = candidate?.order_code || candidate?.orderCode || candidate?.code;
+          if (typeof oc === 'number' || typeof oc === 'string') setPaymentOrderCode(String(oc));
+        } catch {}
         if (url) console.log('Found payment_url by customer_id:', url);
         if (url) return url;
       } catch {}
@@ -293,6 +315,10 @@ export default function HomeScreen() {
         return;
       }
       const paymentObj = (payRes as any).data || {};
+      try {
+        const oc = paymentObj.order_code || paymentObj.orderCode || paymentObj.code || paymentObj?.payos?.order_code;
+        if (typeof oc === 'string') setPaymentOrderCode(oc);
+      } catch {}
       let paymentUrl: string | undefined = await resolvePaymentUrl(subscriptionId, effectiveCustomerId);
       console.log('Resolved payment_url after create:', paymentUrl);
 
@@ -304,6 +330,10 @@ export default function HomeScreen() {
             const getPay = await apiService.payments.getById(paymentId);
             const paymentData = (getPay as any)?.data || {};
             paymentUrl = paymentData.payment_url || paymentData.url || paymentData.redirectUrl;
+            try {
+              const oc = paymentData.order_code || paymentData.orderCode || paymentData.code || paymentData?.payos?.order_code;
+              if (typeof oc === 'string') setPaymentOrderCode(oc);
+            } catch {}
           } catch {}
         }
       }
@@ -447,7 +477,7 @@ export default function HomeScreen() {
               </View>
               <View style={styles.bannerRight}>
                 <View style={styles.bannerGraphic}>
-                  <View style={styles.iconRow}></View>
+                  <View style={styles.iconRow}>
                     <View style={styles.badgeIcon}><Ionicons name="water" size={16} color="#1E3A8A" /></View>
                     <View style={styles.badgeIcon}><Ionicons name="disc" size={16} color="#1E3A8A" /></View>
                     <View style={styles.badgeIcon}><Ionicons name="flask" size={16} color="#1E3A8A" /></View>
@@ -526,6 +556,35 @@ export default function HomeScreen() {
                 setSupportMultipleWindows={true}
                 androidLayerType="hardware"
                 userAgent="Mozilla/5.0 (Linux; Android 11; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36"
+                onNavigationStateChange={(nav: any) => {
+                  try {
+                    const url: string = nav?.url || '';
+                    if (/status=success/i.test(url) || /(payment|pay)(-|\/)success/i.test(url) || /paid|success/i.test(url)) {
+                      (async () => {
+                        try {
+                          // Only order_code is required
+                          let oc: any = paymentOrderCode;
+                          if (!oc) {
+                            try {
+                              const query = url.split('?')[1] || '';
+                              const parts = query.split('&');
+                              const map: Record<string, string> = {};
+                              parts.forEach((p) => {
+                                const [k, v] = p.split('=');
+                                if (k) map[decodeURIComponent(k)] = decodeURIComponent(v || '');
+                              });
+                              oc = map['order_code'] || map['orderCode'] || map['code'];
+                            } catch {}
+                          }
+                          if (oc) await apiService.payments.webhook({ order_code: /^\d+$/.test(String(oc)) ? Number(oc) : oc, status: 'PAID' });
+                        } catch {}
+                        setShowPaymentWeb(false);
+                        setPaymentUrl('');
+                        router.replace('/(tabs)/profile');
+                      })();
+                    }
+                  } catch {}
+                }}
                 injectedJavaScriptBeforeContentLoaded={`(function(){
                   const _open = window.open;
                   window.open = function(url){
@@ -568,26 +627,32 @@ export default function HomeScreen() {
           </SafeAreaView>
         </Modal>
 
-        {/* Service Categories */}
+        {/* Parts Selection */}
         <View style={styles.servicesContainer}>
-          <Text style={styles.servicesTitle}>Select Service</Text>
+          <Text style={styles.servicesTitle}>Select Parts</Text>
           <View style={styles.servicesGrid}>
-            {serviceCategories.map((service) => (
+            {(autoParts.length ? autoParts : []).map((part) => (
               <TouchableOpacity
-                key={service.id}
+                key={part._id || part.id}
                 style={styles.serviceItem}
                 onPress={() => router.push({
                   pathname: '/service-description',
                   params: {
-                    serviceId: service.id.toString(),
-                    serviceName: service.name
+                    partId: (part._id || part.id || '').toString(),
+                    partName: part.name || 'Part',
+                    partPrice: String(part.selling_price ?? ''),
+                    image: part.image || ''
                   }
                 })}
               >
                 <View style={styles.serviceIconContainer}>
-                  <Ionicons name={service.icon as any} size={24} color="#4A90E2" />
+                  {part?.image ? (
+                    <Image source={{ uri: part.image }} style={{ width: 32, height: 32, borderRadius: 6 }} />
+                  ) : (
+                    <Ionicons name="cog" size={24} color="#4A90E2" />
+                  )}
                 </View>
-                <Text style={styles.serviceText}>{service.name}</Text>
+                <Text style={styles.serviceText} numberOfLines={1}>{part.name}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -680,10 +745,11 @@ const styles = StyleSheet.create({
     padding: 20,
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 140,
+    height: 200, // fixed height so all banners are uniform
   },
   bannerLeft: {
     flex: 1,
+    justifyContent: 'center', // vertically center left-side content
   },
   bannerGraphic: {
     width: '100%',
@@ -736,6 +802,7 @@ const styles = StyleSheet.create({
   bannerRight: {
     flex: 1,
     alignItems: 'center',
+    justifyContent: 'center', // vertically center right-side content
   },
   carIllustration: {
     alignItems: 'center',

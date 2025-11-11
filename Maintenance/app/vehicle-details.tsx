@@ -8,6 +8,7 @@ import { useApiService } from '@/hooks/useApiService';
 export default function VehicleDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const api = useApiService();
+  const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [vehicle, setVehicle] = useState<any | null>(null);
 
@@ -60,7 +61,13 @@ export default function VehicleDetailsScreen() {
       )}
       {!isLoading && (
         <View style={styles.footer}>
-          <TouchableOpacity style={styles.bookButton}>
+          <TouchableOpacity
+            style={styles.bookButton}
+            onPress={() => {
+              const vehicleId = (id || v?._id || v?.id || '').toString();
+              router.push({ pathname: '/book-appointment', params: { vehicleId } });
+            }}
+          >
             <Text style={styles.bookText}>Book Service</Text>
           </TouchableOpacity>
         </View>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -6,47 +6,229 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
-  SafeAreaView,
   Modal,
   Dimensions,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useApiService } from '@/hooks/useApiService';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
 
 export default function ServiceDescriptionScreen() {
-  const { serviceId, serviceName } = useLocalSearchParams();
+  const { serviceId, serviceName, partId, partName, partPrice, image } = useLocalSearchParams();
+  const apiService = useApiService();
   const [showDateTimeModal, setShowDateTimeModal] = useState(false);
   const [needsParts, setNeedsParts] = useState(false);
+  const [vehicles, setVehicles] = useState<any[]>([]);
+  const [isLoadingVehicles, setIsLoadingVehicles] = useState(false);
+  const [showVehicleModal, setShowVehicleModal] = useState(false);
+  const [selectedVehicle, setSelectedVehicle] = useState<any>(null);
+  const [selectedCenter, setSelectedCenter] = useState<any>(null);
+  const [showCenterModal, setShowCenterModal] = useState(false);
+  const [centers, setCenters] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'date' | 'slot'>('date');
+  const [selectedDate, setSelectedDate] = useState<string>('');
+  const [slots, setSlots] = useState<any[]>([]);
+  const [selectedSlotId, setSelectedSlotId] = useState<string>('');
+  const [isBooking, setIsBooking] = useState(false);
+  const [fetchedPart, setFetchedPart] = useState<any>(null);
+  const [imageUri, setImageUri] = useState<string | undefined>(undefined);
+  const [imageLoadError, setImageLoadError] = useState(false);
+  const fallbackImage = require('../assets/images/react-logo.png');
 
-  const serviceData = {
-    id: serviceId || '1',
-    name: serviceName || 'Car Repair Service',
-    price: 100,
-    unit: 'Per hour',
-    rating: 4.9,
-    users: '1605K User',
-    description: 'The Model B is a Ford automobile with production starting in model year 1932 and ending in model year 1934. It was the Ford Motor Company\'s second car under the Model A, and was replaced by the 1935 Model 48.',
-    image: 'https://via.placeholder.com/400x200/4A90E2/FFFFFF?text=Car+Repair',
-    location: '2972 Westheimer Rd. Santa Ana, Illinois 85488',
+  useEffect(() => {
+    let isMounted = true;
+    const load = async () => {
+      try {
+        setIsLoadingVehicles(true);
+        const res = await apiService.vehicles.getMyVehicles();
+        if (isMounted && res?.success) {
+          const list = Array.isArray((res as any).data) ? (res as any).data : [];
+          setVehicles(list);
+        }
+        const centersRes = await apiService.centers.getAll();
+        const payload: any = (centersRes as any)?.data || {};
+        const arr = Array.isArray(payload?.centers) ? payload.centers : (Array.isArray(payload) ? payload : []);
+        setCenters(arr);
+      } finally {
+        if (isMounted) setIsLoadingVehicles(false);
+      }
+    };
+    load();
+    return () => { isMounted = false; };
+  }, []);
+
+  useEffect(() => {
+    const fetchSlots = async () => {
+      if (!selectedDate || !selectedCenter?._id) return;
+      try {
+        const res = await apiService.slots.getAll({ date: selectedDate, center_id: selectedCenter._id || selectedCenter.id });
+        const payload: any = (res as any)?.data || {};
+        const arr = Array.isArray(payload?.slots) ? payload.slots : (Array.isArray(payload) ? payload : []);
+        setSlots(arr);
+      } catch {}
+    };
+    fetchSlots();
+  }, [selectedDate, selectedCenter]);
+
+  const formatVnd = (value?: number | string) => {
+    const n = typeof value === 'string' ? Number(value) : value;
+    if (typeof n !== 'number' || Number.isNaN(n)) return '';
+    try {
+      return new Intl.NumberFormat('vi-VN').format(n);
+    } catch {
+      return String(n);
+    }
   };
+
+  useEffect(() => {
+    let alive = true;
+    const loadPart = async () => {
+      if (!partId) return;
+      try {
+        console.log('📦 Fetching part with ID:', partId);
+        const res = await apiService.autoParts.getById(String(partId));
+        console.log('📦 API Response:', JSON.stringify(res, null, 2));
+        const payload: any = (res as any)?.data ?? res;
+        // Some APIs return { data: { ...part } } or the object directly
+        const part = payload?.data && !Array.isArray(payload.data) ? payload.data : payload;
+        console.log('📦 Extracted part:', JSON.stringify(part, null, 2));
+        if (alive) {
+          setFetchedPart(part);
+          // DON'T set imageUri here - let the single useEffect below handle it
+        }
+      } catch (err) {
+        console.log('📦 Error fetching part:', err);
+      }
+    };
+    loadPart();
+    return () => { alive = false; };
+  }, [partId]);
+
+  const serviceData = useMemo(() => {
+    const priceRaw = partPrice != null && String(partPrice).trim() !== '' ? Number(partPrice as string) : (fetchedPart?.selling_price ?? fetchedPart?.price ?? 0);
+    const nameRaw = (partName as string) || (serviceName as string) || fetchedPart?.name || 'Part';
+    const imgRaw = (image as string) || fetchedPart?.image || 'https://via.placeholder.com/400x200/4A90E2/FFFFFF?text=Part';
+    return {
+      id: (partId as string) || (serviceId as string) || '1',
+      name: nameRaw,
+      price: priceRaw || 0,
+      unit: 'Price',
+      rating: 4.9,
+      description: 'Newest part (2025) with improved reliability and performance.',
+      image: imgRaw,
+      location: '2972 Westheimer Rd. Santa Ana, Illinois 85488',
+    };
+  }, [partId, serviceId, partName, serviceName, partPrice, image, fetchedPart]);
+
+  useEffect(() => {
+    // Priority 1: image from fetchedPart (from API) - most reliable
+    if (fetchedPart?.image && typeof fetchedPart.image === 'string' && fetchedPart.image.trim()) {
+      const imgUrl = fetchedPart.image.trim();
+      console.log('🖼️ Priority 1 - Using image from API:', imgUrl);
+      setImageUri(imgUrl);
+      setImageLoadError(false);
+      return;
+    }
+    // Priority 2: image from navigation params (from Home screen)
+    if (typeof image === 'string' && image.trim()) {
+      const imgUrl = image.trim();
+      console.log('🖼️ Priority 2 - Using image from Home params:', imgUrl);
+      setImageUri(imgUrl);
+      setImageLoadError(false);
+      return;
+    }
+    // Priority 3: fallback - no image
+    console.log('🖼️ Priority 3 - No valid image URL, using fallback');
+    setImageUri(undefined);
+  }, [image, fetchedPart]);
 
   const handleBookNow = () => {
     setShowDateTimeModal(true);
   };
 
-  const handleDateTimeConfirm = () => {
-    setShowDateTimeModal(false);
-    router.push({
-      pathname: '/payment',
-      params: { 
-        serviceId: serviceData.id,
-        serviceName: serviceData.name,
-        price: serviceData.price,
-        location: serviceData.location
+  const handleCheckout = async () => {
+    // Validate required fields: center, vehicle, slot
+    if (!selectedCenter?._id) { Alert.alert('Missing center', 'Please select a service center'); return; }
+    if (!selectedVehicle?._id && !selectedVehicle?.id) { Alert.alert('Missing vehicle', 'Please select a vehicle'); return; }
+    if (!selectedSlotId) { Alert.alert('Missing slot', 'Please select a slot'); return; }
+    try {
+      setIsBooking(true);
+      // Resolve customer_id from vehicle or profile
+      let customerId: string | undefined =
+        selectedVehicle?.customer_id ||
+        selectedVehicle?.customer?._id ||
+        selectedVehicle?.customer ||
+        selectedVehicle?.ownerCustomerId;
+      if (!customerId) {
+        try {
+          const profile = await apiService.auth.getProfile();
+          const raw = (profile as any) || {};
+          const payload = raw?.data ?? raw;
+          const candidateSources = [payload, payload?.data, payload?.profile, payload?.user, payload?.currentUser];
+          let userId: string | undefined;
+          let directCustomerId: string | undefined;
+          for (const src of candidateSources) {
+            if (!src) continue;
+            // try customer id directly
+            const possCust =
+              src.customer_id ||
+              src.customerId ||
+              (typeof src.customer === 'string' ? src.customer : undefined) ||
+              src.customer?._id ||
+              src.profile?.customer?._id ||
+              // many backends return customer document with _id and userId nested object
+              (src.userId && typeof src._id === 'string' ? src._id : undefined);
+            if (!directCustomerId && typeof possCust === 'string') directCustomerId = possCust;
+            // try user id to resolve later
+            let val: any = undefined;
+            if (typeof src.userId === 'string') {
+              val = src.userId;
+            } else if (src.userId && typeof src.userId === 'object' && typeof src.userId._id === 'string') {
+              val = src.userId._id;
+            } else if (typeof src.user?.id === 'string') {
+              val = src.user.id;
+            } else if (typeof src.user?._id === 'string') {
+              val = src.user._id;
+            }
+            if (!userId && typeof val === 'string') { userId = val; }
+          }
+          if (directCustomerId) {
+            customerId = directCustomerId;
+          }
+          if (userId) {
+            const cust = await apiService.raw.get(`/customers/user/${userId}`);
+            if (cust?.success) {
+              const c = (cust.data as any) || {};
+              if (typeof c._id === 'string') customerId = c._id;
+            }
+          }
+        } catch {}
       }
-    });
+      if (!customerId) {
+        Alert.alert('Missing information', 'Unable to identify customer_id. Please check your profile.');
+        return;
+      }
+      const body: any = {
+        customer_id: customerId,
+        vehicle_id: selectedVehicle?._id || selectedVehicle?.id,
+        center_id: selectedCenter?._id || selectedCenter?.id,
+        slot_id: selectedSlotId,
+      };
+      const res = await apiService.raw.post('/appointments', body);
+      if (res?.success !== false) {
+        setShowDateTimeModal(false);
+        router.replace('/booking-success');
+      } else {
+        Alert.alert('Failed to create appointment', (res as any)?.message || 'Booking failed');
+      }
+    } catch (e: any) {
+      Alert.alert('Failed to create appointment', e?.message || 'Booking failed');
+    } finally { setIsBooking(false); }
   };
 
   return (
@@ -57,33 +239,49 @@ export default function ServiceDescriptionScreen() {
           <TouchableOpacity onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={24} color="#333" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Repair Service</Text>
+          <Text style={styles.headerTitle}>{serviceData.name}</Text>
           <View style={styles.placeholder} />
         </View>
 
         {/* Service Image */}
         <View style={styles.imageContainer}>
-          <Image source={{ uri: serviceData.image }} style={styles.serviceImage} />
+          {imageUri && !imageLoadError ? (
+            <Image
+              key={imageUri}
+              source={{ uri: imageUri }}
+              style={styles.serviceImage}
+              resizeMode="cover"
+              onLoad={() => {
+                console.log('✅ Image loaded successfully');
+              }}
+              onError={(e) => {
+                console.log('❌ Image load error:', e.nativeEvent?.error || 'Unknown error');
+                console.log('❌ Failed URL:', imageUri);
+                setImageLoadError(true);
+              }}
+            />
+          ) : (
+            <Image
+              source={fallbackImage}
+              style={styles.serviceImage}
+              resizeMode="cover"
+            />
+          )}
           <View style={styles.priceBadge}>
             <Text style={styles.priceUnit}>{serviceData.unit}</Text>
             <View style={styles.priceDivider} />
-            <Text style={styles.priceAmount}>${serviceData.price}</Text>
+            <Text style={styles.priceAmount}>{formatVnd(serviceData.price)} VNĐ</Text>
           </View>
         </View>
 
         {/* Service Description */}
         <View style={styles.descriptionContainer}>
           <View style={styles.descriptionHeader}>
-            <Text style={styles.descriptionTitle}>Service Description</Text>
+            <Text style={styles.descriptionTitle}>Parts Description</Text>
             <View style={styles.ratingContainer}>
               <Ionicons name="star" size={16} color="#FFD700" />
               <Text style={styles.rating}>{serviceData.rating}</Text>
             </View>
-          </View>
-          
-          <View style={styles.userCount}>
-            <Ionicons name="person" size={16} color="#666" />
-            <Text style={styles.userCountText}>{serviceData.users}</Text>
           </View>
 
           <Text style={styles.descriptionText}>{serviceData.description}</Text>
@@ -106,20 +304,28 @@ export default function ServiceDescriptionScreen() {
           <View style={styles.infoCard}>
             <View style={styles.infoRow}>
               <Ionicons name="location" size={20} color="#666" />
-              <Text style={styles.infoText}>Vehicle location</Text>
+              <TouchableOpacity style={{ flex: 1 }} onPress={() => setShowCenterModal(true)}>
+                <Text style={styles.infoText}>{selectedCenter?.name || 'Select service center'}</Text>
+              </TouchableOpacity>
               <Ionicons name="settings" size={20} color="#666" />
             </View>
             
             <View style={styles.infoRow}>
               <Ionicons name="car" size={20} color="#666" />
-              <Text style={styles.infoText}>Vehicle Model</Text>
+              <TouchableOpacity style={{ flex: 1 }} onPress={() => setShowVehicleModal(true)}>
+                <Text style={styles.infoText}>{selectedVehicle?.model || selectedVehicle?.name || selectedVehicle?.licensePlate || 'Select my vehicle'}</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
       </ScrollView>
 
       {/* Book Now Button */}
-      <TouchableOpacity style={styles.bookButton} onPress={handleBookNow}>
+      <TouchableOpacity
+        style={[styles.bookButton, !(needsParts && (selectedCenter?._id || selectedCenter?.id) && (selectedVehicle?._id || selectedVehicle?.id)) && { opacity: 0.5 }]}
+        disabled={!(needsParts && (selectedCenter?._id || selectedCenter?.id) && (selectedVehicle?._id || selectedVehicle?.id))}
+        onPress={handleBookNow}
+      >
         <Text style={styles.bookButtonText}>Book Now</Text>
       </TouchableOpacity>
 
@@ -133,94 +339,195 @@ export default function ServiceDescriptionScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Date & Time</Text>
+              <Text style={styles.modalTitle}>Date & Slot</Text>
               <TouchableOpacity onPress={() => setShowDateTimeModal(false)}>
                 <Ionicons name="close" size={24} color="#333" />
               </TouchableOpacity>
             </View>
 
             <View style={styles.tabContainer}>
-              <TouchableOpacity style={[styles.tab, styles.activeTab]}>
-                <Text style={styles.activeTabText}>Date</Text>
+              <TouchableOpacity onPress={() => setActiveTab('date')} style={[styles.tab, activeTab==='date' && styles.activeTab]}>
+                <Text style={activeTab==='date' ? styles.activeTabText : styles.tabText}>Date</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.tab}>
-                <Text style={styles.tabText}>Time</Text>
+              <TouchableOpacity onPress={() => setActiveTab('slot')} style={[styles.tab, activeTab==='slot' && styles.activeTab]}>
+                <Text style={activeTab==='slot' ? styles.activeTabText : styles.tabText}>Slot</Text>
               </TouchableOpacity>
             </View>
 
-            <View style={styles.calendarContainer}>
-              <View style={styles.calendarHeader}>
-                <TouchableOpacity>
-                  <Ionicons name="chevron-back" size={20} color="#999" />
-                </TouchableOpacity>
-                <Text style={styles.monthYear}>January 2023</Text>
-                <TouchableOpacity>
-                  <Ionicons name="chevron-forward" size={20} color="#333" />
-                </TouchableOpacity>
+            {activeTab === 'date' ? (
+              <DateMonthGrid
+                selectedDate={selectedDate}
+                onSelect={(iso) => { setSelectedDate(iso); setActiveTab('slot'); }}
+              />
+            ) : (
+              <View style={{ paddingVertical: 8 }}>
+                <Text style={{ fontWeight: '700', marginBottom: 8 }}>Select slot</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                  {slots.map((s: any) => {
+                    const id = s._id || s.id;
+                    const label = `${s.start_time || s.start || ''} - ${s.end_time || s.end || ''}`.trim();
+                    const selected = selectedSlotId === id;
+                    const isFull = typeof s.capacity === 'number' && typeof s.booked_count === 'number' && s.booked_count >= s.capacity;
+                    const statusStr = String(s.status || '').toLowerCase();
+                    const isInactive = (!!statusStr) && statusStr !== 'active';
+                    const disabled = isFull || isInactive;
+                    return (
+                      <TouchableOpacity key={id} style={{ width: '33.33%', padding: 6 }} onPress={() => !disabled && setSelectedSlotId(id)} disabled={disabled}>
+                        <View style={{ paddingVertical: 10, borderRadius: 12, backgroundColor: selected ? '#FF4444' : (disabled ? '#E5E7EB' : '#F3F4F6'), alignItems: 'center' }}>
+                          <Text style={{ color: selected ? '#fff' : (disabled ? '#9CA3AF' : '#111') }}>{label || '-'}</Text>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                  {(!slots || slots.length === 0) && (
+                    <Text style={{ color: '#666' }}>No slots. Please choose date and center.</Text>
+                  )}
+                </View>
               </View>
+            )}
 
-              <View style={styles.calendarGrid}>
-                <Text style={styles.dayHeader}>Sun</Text>
-                <Text style={styles.dayHeader}>Mon</Text>
-                <Text style={styles.dayHeader}>Tue</Text>
-                <Text style={styles.dayHeader}>Wed</Text>
-                <Text style={styles.dayHeader}>Thu</Text>
-                <Text style={styles.dayHeader}>Fri</Text>
-                <Text style={styles.dayHeader}>Sat</Text>
-                
-                {/* Calendar days would go here */}
-                <Text style={styles.dayText}>26</Text>
-                <Text style={styles.dayText}>27</Text>
-                <Text style={styles.dayText}>28</Text>
-                <Text style={styles.dayText}>29</Text>
-                <Text style={styles.dayText}>30</Text>
-                <Text style={styles.dayText}>31</Text>
-                <Text style={styles.dayText}>1</Text>
-                <Text style={styles.dayText}>2</Text>
-                <Text style={styles.dayText}>3</Text>
-                <Text style={styles.dayText}>4</Text>
-                <Text style={styles.dayText}>5</Text>
-                <Text style={styles.dayText}>6</Text>
-                <Text style={styles.dayText}>7</Text>
-                <Text style={styles.dayText}>8</Text>
-                <Text style={styles.dayText}>9</Text>
-                <Text style={styles.dayText}>10</Text>
-                <Text style={styles.dayText}>11</Text>
-                <Text style={styles.dayText}>12</Text>
-                <Text style={styles.dayText}>13</Text>
-                <Text style={styles.dayText}>14</Text>
-                <Text style={styles.dayText}>15</Text>
-                <Text style={styles.dayText}>16</Text>
-                <Text style={styles.dayText}>17</Text>
-                <Text style={styles.dayText}>18</Text>
-                <Text style={[styles.dayText, styles.selectedDay]}>19</Text>
-                <Text style={styles.dayText}>20</Text>
-                <Text style={styles.dayText}>21</Text>
-                <Text style={styles.dayText}>22</Text>
-                <Text style={styles.dayText}>23</Text>
-                <Text style={styles.dayText}>24</Text>
-                <Text style={styles.dayText}>25</Text>
-                <Text style={styles.dayText}>26</Text>
-                <Text style={styles.dayText}>27</Text>
-                <Text style={styles.dayText}>28</Text>
-                <Text style={styles.dayText}>29</Text>
-                <Text style={styles.dayText}>30</Text>
-                <Text style={styles.dayText}>31</Text>
-                <Text style={styles.dayText}>1</Text>
-                <Text style={styles.dayText}>2</Text>
-                <Text style={styles.dayText}>3</Text>
-                <Text style={styles.dayText}>4</Text>
-                <Text style={styles.dayText}>5</Text>
-              </View>
-            </View>
-
-            <TouchableOpacity style={styles.checkoutButton} onPress={handleDateTimeConfirm}>
-              <Text style={styles.checkoutButtonText}>Checkout</Text>
+            <TouchableOpacity style={styles.checkoutButton} onPress={handleCheckout} disabled={isBooking}>
+              {isBooking ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.checkoutButtonText}>Book Now</Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
+
+      {/* Vehicle select modal */}
+      <Modal
+        visible={showVehicleModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowVehicleModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '70%' }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Vehicle</Text>
+              <TouchableOpacity onPress={() => setShowVehicleModal(false)}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+            {isLoadingVehicles ? (
+              <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+                <Text>Loading...</Text>
+              </View>
+            ) : (
+              <ScrollView>
+                {vehicles.map((v: any) => (
+                  <TouchableOpacity
+                    key={(v?._id || v?.id || v?.licensePlate || v?.vin || Math.random()).toString()}
+                    style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }}
+                    onPress={() => { setSelectedVehicle(v); setShowVehicleModal(false); }}
+                  >
+                    <Ionicons name="car" size={20} color="#1E3A8A" />
+                    <Text style={{ marginLeft: 12, color: '#222', fontWeight: '600' }}>
+                      {v?.model || v?.name || v?.licensePlate || 'My Vehicle'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+                {vehicles.length === 0 && (
+                  <Text style={{ textAlign: 'center', color: '#666', paddingVertical: 16 }}>No vehicles</Text>
+                )}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Center select modal */}
+      <Modal
+        visible={showCenterModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowCenterModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '70%' }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Service Center</Text>
+              <TouchableOpacity onPress={() => setShowCenterModal(false)}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView>
+              {centers.map((c: any) => (
+                <TouchableOpacity key={c._id || c.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }} onPress={() => { setSelectedCenter(c); setShowCenterModal(false); }}>
+                  <Image source={{ uri: c.image || 'https://via.placeholder.com/48x48?text=C' }} style={{ width: 48, height: 48, borderRadius: 8 }} />
+                  <View style={{ marginLeft: 12, flex: 1 }}>
+                    <Text style={{ color: '#111', fontWeight: '700' }}>{c.name}</Text>
+                    <Text style={{ color: '#6B7280', fontSize: 12 }} numberOfLines={1}>{c.address}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+              {centers.length === 0 && <Text style={{ textAlign: 'center', color: '#666', paddingVertical: 16 }}>No centers</Text>}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
+  );
+}
+
+// Month-based date picker with month navigation and day grid
+function DateMonthGrid({ selectedDate, onSelect }: { selectedDate?: string; onSelect: (iso: string) => void }) {
+  const [cursor, setCursor] = useState(() => {
+    if (selectedDate && /^\d{4}-\d{2}-\d{2}$/.test(selectedDate)) {
+      const [y, m] = selectedDate.split('-').map((v) => Number(v));
+      return new Date(y, (m - 1), 1);
+    }
+    const d = new Date();
+    d.setDate(1);
+    return d;
+  });
+
+  const year = cursor.getFullYear();
+  const month = cursor.getMonth(); // 0-based
+  const first = new Date(year, month, 1);
+  const startWeekday = first.getDay(); // 0=Sun
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells: (number | null)[] = Array(startWeekday).fill(null).concat(Array.from({ length: daysInMonth }, (_, i) => i + 1));
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const toIso = (y: number, m: number, d: number) => {
+    const mm = String(m + 1).padStart(2, '0');
+    const dd = String(d).padStart(2, '0');
+    return `${y}-${mm}-${dd}`;
+  };
+
+  return (
+    <View style={styles.calendarContainer}>
+      <View style={styles.calendarHeader}>
+        <TouchableOpacity onPress={() => setCursor(new Date(year, month - 1, 1))}>
+          <Ionicons name="chevron-back" size={20} color="#999" />
+        </TouchableOpacity>
+        <Text style={styles.monthYear}>{cursor.toLocaleString(undefined, { month: 'long', year: 'numeric' })}</Text>
+        <TouchableOpacity onPress={() => setCursor(new Date(year, month + 1, 1))}>
+          <Ionicons name="chevron-forward" size={20} color="#333" />
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.calendarGrid}>
+        {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((d) => (
+          <Text key={d} style={styles.dayHeader}>{d}</Text>
+        ))}
+        {cells.map((d, idx) => {
+          const iso = d ? toIso(year, month, d) : '';
+          const isSelected = !!d && selectedDate === iso;
+          return (
+            <TouchableOpacity key={idx} style={{ width: '14.28%', alignItems: 'center', paddingVertical: 6 }} disabled={!d} onPress={() => d && onSelect(iso)}>
+              <View style={{ width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: isSelected ? '#FF4444' : '#F3F4F6' }}>
+                <Text style={{ color: isSelected ? '#FFFFFF' : '#111' }}>{d ?? ''}</Text>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
   );
 }
 
