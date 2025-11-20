@@ -14,16 +14,7 @@ export default function BookingSuccessScreen() {
   const { serviceId, serviceName, price, location, paymentMethod } = useLocalSearchParams();
 
   const handleGoTrack = () => {
-    router.push({
-      pathname: '/tracking',
-      params: {
-        serviceId: serviceId as string,
-        serviceName: serviceName as string,
-        price: price as string,
-        location: location as string,
-        paymentMethod: paymentMethod as string
-      }
-    });
+    router.push('/(tabs)/records');
   };
 
   const handleBackToHome = () => {

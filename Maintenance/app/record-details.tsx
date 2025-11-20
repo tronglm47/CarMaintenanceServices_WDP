@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, Stack } from 'expo-router';
 import { useApiService } from '@/hooks/useApiService';
@@ -148,12 +148,17 @@ export default function RecordDetailsScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
-      <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 24, paddingTop: 12 }}>
-        {loading ? (
-          <Text style={{ textAlign: 'center', color: '#666' }}>Loading...</Text>
-        ) : records.length === 0 ? (
-          <Text style={{ textAlign: 'center', color: '#666' }}>No record data</Text>
-        ) : (
+      {loading ? (
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#4A90E2" />
+        </View>
+      ) : records.length === 0 ? (
+        <View style={styles.centerContainer}>
+          <Text style={styles.emptyText}>No record data</Text>
+        </View>
+      ) : (
+        <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 24, paddingTop: 12 }}>
+          {(
           records.map((rec: any, idx: number) => {
             const title = rec?.name || rec?.title || `Record ${idx + 1}`;
             const status = (rec?.status || '').toString().toLowerCase();
@@ -356,8 +361,9 @@ export default function RecordDetailsScreen() {
               </View>
             );
           })
-        )}
-      </ScrollView>
+          )}
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
@@ -376,6 +382,16 @@ function renderRow(label?: string, value?: string) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFFFFF' },
   content: { paddingHorizontal: 16 },
+  centerContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyText: {
+    fontSize: 18,
+    color: '#999',
+    fontWeight: '500',
+  },
   card: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,

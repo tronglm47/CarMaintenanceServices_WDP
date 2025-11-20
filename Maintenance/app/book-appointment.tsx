@@ -5,6 +5,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAxios } from '@/hooks/useAxios';
 import { useApiService } from '@/hooks/useApiService';
+import { toast } from 'sonner-native';
 
 interface CenterItem { _id: string; name?: string; address?: string; image?: string }
 
@@ -78,6 +79,10 @@ export default function BookAppointmentScreen() {
       const body = { customer_id: customerId, vehicle_id: vehicleId, center_id: centerId, slot_id: slotId };
       const res = await apiService.raw.post('/appointments', body);
       if (res?.success === false) throw new Error(res?.message || 'Không thể đặt lịch');
+      
+      // Show success toast
+      toast.success('Booking placed successfully!');
+      
       router.replace('/booking-success');
     } catch (e: any) {
       Alert.alert('Lỗi', e?.message || 'Không thể đặt lịch');

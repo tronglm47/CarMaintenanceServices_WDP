@@ -25,6 +25,17 @@ interface SubscriptionItem {
   status?: string;
 }
 
+interface WarrantyItem {
+  warranty_id?: string;
+  part_id?: string;
+  part_name?: string;
+  part_image?: string;
+  start_date?: string;
+  end_date?: string;
+  days_remaining?: number;
+  status?: string;
+}
+
 export default function ProfileScreen() {
   const { user } = useAuth();
   const api = useApiService();
@@ -38,6 +49,8 @@ export default function ProfileScreen() {
   const [email, setEmail] = useState<string>('');
   const [phone, setPhone] = useState<string>('');
   const [address, setAddress] = useState<string>('');
+  const [warranties, setWarranties] = useState<WarrantyItem[]>([]);
+  const [customerId, setCustomerId] = useState<string>('');
 
   const displayName = useMemo(() => {
     return (
@@ -71,49 +84,98 @@ export default function ProfileScreen() {
   useEffect(() => {
     loadData();
   }, []);
+  
+  // Load warranties when customerId is available
+  useEffect(() => {
+    const loadWarranties = async () => {
+      if (!customerId) {
+        console.log('⚠️ No customerId available for warranties');
+        return;
+      }
+      
+      try {
+        console.log('🔍 Loading warranties for customerId:', customerId);
+        const warrantyRes = await api.raw.get(`/warranties/parts?customerId=${customerId}`);
+        console.log('📦 Warranty response:', JSON.stringify(warrantyRes, null, 2));
+        
+        const payload: any = (warrantyRes as any)?.data || warrantyRes || {};
+        console.log('📦 Payload:', payload);
+        
+        const warrantyList: WarrantyItem[] = Array.isArray(payload?.data) 
+          ? payload.data 
+          : Array.isArray(payload) 
+          ? payload 
+          : [];
+        
+        console.log('✅ Warranty list:', warrantyList);
+        console.log('✅ Warranty count:', warrantyList.length);
+        setWarranties(warrantyList);
+      } catch (error) {
+        console.log('❌ Error loading warranties:', error);
+      }
+    };
+    
+    loadWarranties();
+  }, [customerId]);
 
   useEffect(() => {
     const loadProfile = async () => {
       setIsLoadingProfile(true);
       try {
+        console.log('👤 Loading profile...');
         const res = await api.auth.getProfile();
+        console.log('📦 Profile response:', JSON.stringify(res, null, 2));
+        
         const raw: any = (res as any)?.data || {};
-        const candidates = [raw, raw?.data, raw?.profile, raw?.user];
-        let dName = '';
-        let uid: string | undefined;
-        let mail = '';
-        let phoneNum = '';
-        let addr = '';
-        for (const src of candidates) {
-          if (!src) continue;
-          const possName = src.fullName || src.customerName || src.name || src.username || src.userName || src.displayName || src.firstName;
-          if (typeof possName === 'string' && possName.trim()) dName = possName.trim();
-          const possId = src.userId || src._id || src.id;
-          if (!uid && typeof possId === 'string') uid = possId;
-          const possEmail = src.email;
-          if (typeof possEmail === 'string' && possEmail.trim()) mail = possEmail.trim();
-          const possPhone = src.phone || src.phoneNumber;
-          if (typeof possPhone === 'string' && possPhone.trim()) phoneNum = possPhone.trim();
-          const possAddr = src.address || src.location || src.city;
-          if (typeof possAddr === 'string' && possAddr.trim()) addr = possAddr.trim();
+        const profileData = raw?.data || raw;
+        console.log('📦 Profile data:', profileData);
+        
+        // Get customer ID directly from _id field
+        if (profileData?._id && typeof profileData._id === 'string') {
+          console.log('✅ Setting customerId from profile._id:', profileData._id);
+          setCustomerId(profileData._id);
+        } else {
+          console.log('⚠️ No _id found in profile data');
         }
-        setDisplayNameState(dName);
-        setEmail(mail || (user?.email ?? ''));
-        setPhone(phoneNum || (user?.phoneNumber ?? ''));
-        setAddress(addr);
-        setUserId(uid);
-
-        // Try to load dedicated Customer entity
-        if (uid) {
-          try {
-            const cust = await api.raw.get(`/customers/user/${uid}`);
-            const c: any = (cust as any)?.data || {};
-            const cName = c.customerName || c.fullName || c.name;
-            if (typeof cName === 'string') setCustomerName(cName);
-            if (typeof c.address === 'string') setAddress((prev) => prev || c.address);
-            if (typeof c.phone === 'string') setPhone((prev) => prev || c.phone);
-          } catch {}
+        
+        // Get customer name
+        const cName = profileData?.customerName || profileData?.fullName || profileData?.name;
+        if (typeof cName === 'string' && cName.trim()) {
+          setCustomerName(cName.trim());
+          setDisplayNameState(cName.trim());
         }
+        
+        // Get email from userId or profile
+        const emailValue = profileData?.userId?.email || profileData?.email;
+        if (typeof emailValue === 'string' && emailValue.trim()) {
+          setEmail(emailValue.trim());
+        } else {
+          setEmail(user?.email ?? '');
+        }
+        
+        // Get phone from userId or profile
+        const phoneValue = profileData?.userId?.phone || profileData?.phone || profileData?.phoneNumber;
+        if (typeof phoneValue === 'string' && phoneValue.trim()) {
+          setPhone(phoneValue.trim());
+        } else {
+          setPhone(user?.phoneNumber ?? '');
+        }
+        
+        // Get address
+        const addrValue = profileData?.address || profileData?.location || profileData?.city;
+        if (typeof addrValue === 'string' && addrValue.trim()) {
+          setAddress(addrValue.trim());
+        }
+        
+        // Get userId for other purposes
+        const userIdValue = profileData?.userId?._id || profileData?.userId;
+        if (typeof userIdValue === 'string') {
+          setUserId(userIdValue);
+        }
+        
+        console.log('✅ Profile loaded successfully');
+      } catch (error) {
+        console.log('❌ Error loading profile:', error);
       } finally {
         setIsLoadingProfile(false);
       }
@@ -132,6 +194,7 @@ export default function ProfileScreen() {
 
   const activeCount = useMemo(() => items.filter((i) => String(i.subscription?.status || '').toUpperCase() === 'ACTIVE').length, [items]);
   const pendingCount = useMemo(() => items.filter((i) => String(i.subscription?.status || '').toUpperCase() === 'PENDING').length, [items]);
+  const activeWarrantiesCount = useMemo(() => warranties.filter((w) => String(w.status || '').toLowerCase() === 'active').length, [warranties]);
 
   const renderItem = ({ item }: { item: { vehicle: VehicleItem; subscription: SubscriptionItem } }) => {
     const v = item.vehicle;
@@ -187,44 +250,69 @@ export default function ProfileScreen() {
 
         {/* User Info Card */}
         <View style={styles.infoCard}>
-          <View style={styles.topRow}>
-            <View style={styles.leftCol}>
-              <Text style={styles.nameText} numberOfLines={1}>{displayName}</Text>
-              <View style={styles.infoRows}>
-                {!!customerName && (
-                  <View style={styles.infoRow}><Ionicons name="person" size={16} color="#666" /><Text style={styles.infoValue} numberOfLines={1}>{customerName}</Text></View>
-                )}
-                {!!phone && (
-                  <View style={styles.infoRow}><Ionicons name="call" size={16} color="#666" /><Text style={styles.infoValue}>{phone}</Text></View>
-                )}
-                {!!address && (
-                  <View style={styles.infoRow}><Ionicons name="location" size={16} color="#666" /><Text style={styles.infoValue} numberOfLines={2}>{address}</Text></View>
-                )}
-                {!!email && (
-                  <View style={styles.infoRow}><Ionicons name="mail" size={16} color="#666" /><Text style={styles.infoValue}>{email}</Text></View>
-                )}
-              </View>
+          <View style={styles.profileHeader}>
+            <View style={styles.avatarHero}>
+              {user?.photoURL ? (
+                <Image source={{ uri: user.photoURL }} style={{ width: '100%', height: '100%', borderRadius: 16 }} />
+              ) : (
+                <Ionicons name="person" size={56} color="#1E3A8A" />
+              )}
             </View>
-            <View style={styles.rightCol}>
-              <View style={styles.avatarHero}>
-                {user?.photoURL ? (
-                  <Image source={{ uri: user.photoURL }} style={{ width: '100%', height: '100%', borderRadius: 12 }} />
-                ) : (
-                  <Ionicons name="person" size={48} color="#1E3A8A" />
-                )}
-              </View>
-            </View>
+            <Text style={styles.nameText}>{displayName}</Text>
           </View>
+          
+          <View style={styles.infoSection}>
+            {!!phone && (
+              <View style={styles.infoRow}>
+                <View style={styles.iconCircle}>
+                  <Ionicons name="call" size={18} color="#1E3A8A" />
+                </View>
+                <Text style={styles.infoValue}>{phone}</Text>
+              </View>
+            )}
+            {!!email && (
+              <View style={styles.infoRow}>
+                <View style={styles.iconCircle}>
+                  <Ionicons name="mail" size={18} color="#1E3A8A" />
+                </View>
+                <Text style={styles.infoValue} numberOfLines={2}>{email}</Text>
+              </View>
+            )}
+            {!!address && (
+              <View style={styles.infoRow}>
+                <View style={styles.iconCircle}>
+                  <Ionicons name="location" size={18} color="#1E3A8A" />
+                </View>
+                <Text style={styles.infoValue} numberOfLines={3}>{address}</Text>
+              </View>
+            )}
+          </View>
+          
+          <View style={styles.divider} />
+          
           <View style={styles.kpiRow}>
-            <View style={styles.kpiBox}><Text style={styles.kpiNum}>{items.length}</Text><Text style={styles.kpiLabel}>Gói</Text></View>
-            <View style={styles.kpiBox}><Text style={styles.kpiNum}>{activeCount}</Text><Text style={styles.kpiLabel}>Active</Text></View>
-            <View style={styles.kpiBox}><Text style={styles.kpiNum}>{pendingCount}</Text><Text style={styles.kpiLabel}>Pending</Text></View>
+            <View style={styles.kpiBox}>
+              <Text style={styles.kpiNum}>{items.length}</Text>
+              <Text style={styles.kpiLabel}>Gói dịch vụ</Text>
+            </View>
+            <View style={styles.kpiDivider} />
+            <View style={styles.kpiBox}>
+              <Text style={styles.kpiNum}>{activeCount}</Text>
+              <Text style={styles.kpiLabel}>Đang hoạt động</Text>
+            </View>
+            <View style={styles.kpiDivider} />
+            <View style={styles.kpiBox}>
+              <Text style={styles.kpiNum}>{pendingCount}</Text>
+              <Text style={styles.kpiLabel}>Chờ xử lý</Text>
+            </View>
           </View>
         </View>
 
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Các gói dịch vụ của bạn</Text>
-          <Text style={styles.sectionSubtitle}>{items.length} gói • {vehicles.length} xe</Text>
+          <View>
+            <Text style={styles.sectionTitle}>Các gói dịch vụ của bạn</Text>
+            <Text style={styles.sectionSubtitle}>{items.length} gói • {vehicles.length} xe</Text>
+          </View>
         </View>
 
         {isLoading ? (
@@ -246,6 +334,64 @@ export default function ProfileScreen() {
             <Text style={styles.emptyText}>Bạn chưa có gói dịch vụ nào</Text>
           </View>
         )}
+
+        {/* Warranties Section */}
+        <View style={styles.sectionHeader}>
+          <View>
+            <Text style={styles.sectionTitle}>Gói bảo hành</Text>
+            <Text style={styles.sectionSubtitle}>{warranties.length} bảo hành • {activeWarrantiesCount} đang hoạt động</Text>
+          </View>
+        </View>
+
+        {isLoading ? (
+          <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+            <ActivityIndicator />
+          </View>
+        ) : warranties.length ? (
+          <FlatList
+            data={warranties}
+            keyExtractor={(item, idx) => String(item.warranty_id || idx)}
+            renderItem={({ item }) => (
+              <View style={styles.warrantyCard}>
+                <View style={styles.warrantyHeader}>
+                  <View style={styles.warrantyImageBox}>
+                    {item.part_image ? (
+                      <Image source={{ uri: item.part_image }} style={{ width: 48, height: 48, borderRadius: 8 }} resizeMode="contain" />
+                    ) : (
+                      <Ionicons name="construct" size={24} color="#1E3A8A" />
+                    )}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.warrantyPartName} numberOfLines={1}>{item.part_name || 'Unknown Part'}</Text>
+                    <View style={styles.warrantyDaysRow}>
+                      <Ionicons name="time" size={14} color="#666" />
+                      <Text style={styles.warrantyDaysText}>{item.days_remaining || 0} ngày còn lại</Text>
+                    </View>
+                  </View>
+                  <View style={[styles.warrantyStatus, item.status?.toLowerCase() === 'active' ? styles.warrantyStatusActive : styles.warrantyStatusInactive]}>
+                    <Text style={[styles.warrantyStatusText, item.status?.toLowerCase() === 'active' ? styles.warrantyStatusTextActive : styles.warrantyStatusTextInactive]}>
+                      {String(item.status || 'N/A').toUpperCase()}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.warrantyDateRow}>
+                  <Ionicons name="calendar-outline" size={16} color="#666" />
+                  <Text style={styles.warrantyDateText}>
+                    {formatDate(item.start_date)} - {formatDate(item.end_date)}
+                  </Text>
+                </View>
+              </View>
+            )}
+            ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+            scrollEnabled={false}
+            contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 16 }}
+          />
+        ) : (
+          <View style={styles.emptyWrap}>
+            <Ionicons name="shield-checkmark-outline" size={32} color="#999" />
+            <Text style={styles.emptyText}>Bạn chưa có gói bảo hành nào</Text>
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -254,7 +400,7 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8F9FA',
   },
   header: {
     flexDirection: 'row',
@@ -263,192 +409,196 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 16,
+    backgroundColor: '#FFFFFF',
   },
   title: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#1F2937',
   },
   refreshBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F0F8FF',
+    backgroundColor: '#E3F2FD',
   },
   infoCard: {
     marginHorizontal: 20,
-    marginBottom: 12,
+    marginTop: 16,
+    marginBottom: 20,
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#EEF2F7',
-    padding: 16,
+    borderRadius: 20,
+    padding: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 6,
   },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    gap: 12,
-  },
-  leftCol: {
-    flex: 1,
-  },
-  rightCol: {
-    flex: 1,
+  profileHeader: {
     alignItems: 'center',
-    justifyContent: 'center',
+    marginBottom: 20,
   },
   avatarHero: {
-    width: '100%',
-    height: 110,
-    borderRadius: 12,
-    backgroundColor: '#F0F8FF',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#E3F2FD',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  infoLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
     marginBottom: 12,
-    gap: 12,
-  },
-  avatarLarge: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#F0F8FF',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderWidth: 4,
+    borderColor: '#FFFFFF',
+    shadowColor: '#1E3A8A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
   },
   nameText: {
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: '700',
     color: '#1F2937',
+    textAlign: 'center',
   },
-  customerText: {
-    marginTop: 2,
-    color: '#64748B',
-    fontSize: 12,
-  },
-  infoRows: {
-    gap: 8,
-    marginTop: 40,
+  infoSection: {
+    gap: 14,
   },
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 12,
+  },
+  iconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#E3F2FD',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   infoValue: {
-    color: '#374151',
     flex: 1,
+    fontSize: 15,
+    color: '#374151',
+    lineHeight: 20,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#E5E7EB',
+    marginVertical: 20,
   },
   kpiRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 12,
+    alignItems: 'center',
   },
   kpiBox: {
     flex: 1,
     alignItems: 'center',
   },
   kpiNum: {
-    fontSize: 16,
+    fontSize: 24,
     fontWeight: '700',
-    color: '#111827',
+    color: '#1E3A8A',
+    marginBottom: 4,
   },
   kpiLabel: {
     fontSize: 12,
     color: '#6B7280',
+    textAlign: 'center',
+  },
+  kpiDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: '#E5E7EB',
   },
   sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 12,
+    paddingTop: 12,
+    paddingBottom: 16,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 4,
   },
   sectionSubtitle: {
-    marginTop: 4,
-    color: '#777',
-    fontSize: 12,
+    fontSize: 13,
+    color: '#9CA3AF',
   },
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
-    borderWidth: 1,
-    borderColor: '#F0F0F0',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 4,
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
   },
   avatarBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F0F8FF',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#E3F2FD',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
   },
   cardTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 2,
   },
   cardSub: {
-    fontSize: 12,
-    color: '#666',
+    fontSize: 13,
+    color: '#6B7280',
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 6,
+    marginTop: 8,
     gap: 8,
   },
   rowText: {
-    color: '#444',
+    flex: 1,
+    fontSize: 14,
+    color: '#374151',
+    lineHeight: 20,
   },
   statusPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#EEE',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
   },
   statusActive: {
-    backgroundColor: '#E8F5E8',
-    borderColor: '#C7EAC7',
+    backgroundColor: '#D1FAE5',
   },
   statusOther: {
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#FEF3C7',
   },
   statusText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   statusTextActive: {
-    color: '#2E7D32',
+    color: '#065F46',
   },
   statusTextOther: {
-    color: '#555',
+    color: '#92400E',
   },
   emptyWrap: {
     alignItems: 'center',
@@ -457,6 +607,90 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     color: '#666',
+  },
+  warrantyCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  warrantyHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  warrantyImageBox: {
+    width: 64,
+    height: 64,
+    borderRadius: 16,
+    backgroundColor: '#F0F8FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    padding: 8,
+  },
+  warrantyPartName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 6,
+    lineHeight: 20,
+  },
+  warrantyDaysRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  warrantyDaysText: {
+    fontSize: 13,
+    color: '#92400E',
+    fontWeight: '600',
+  },
+  warrantyStatus: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  warrantyStatusActive: {
+    backgroundColor: '#D1FAE5',
+  },
+  warrantyStatusInactive: {
+    backgroundColor: '#FEE2E2',
+  },
+  warrantyStatusText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  warrantyStatusTextActive: {
+    color: '#065F46',
+  },
+  warrantyStatusTextInactive: {
+    color: '#991B1B',
+  },
+  warrantyDateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+    backgroundColor: '#F9FAFB',
+    padding: 10,
+    borderRadius: 12,
+  },
+  warrantyDateText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#6B7280',
+    fontWeight: '500',
   },
 });
 

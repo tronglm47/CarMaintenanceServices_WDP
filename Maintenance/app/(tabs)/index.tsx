@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useApiService } from '@/hooks/useApiService';
+import { toast } from 'sonner-native';
 
 const { width } = Dimensions.get('window');
 
@@ -38,6 +39,7 @@ export default function HomeScreen() {
   const [showPaymentWeb, setShowPaymentWeb] = useState(false);
   const [paymentOrderCode, setPaymentOrderCode] = useState<string>('');
   const [autoParts, setAutoParts] = useState<any[]>([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const WebViewComponent = useMemo(() => {
     try {
       const mod = require('react-native-webview');
@@ -59,124 +61,120 @@ export default function HomeScreen() {
     }
   }, [showPaymentWeb, paymentUrl, WebViewComponent]);
 
+  const loadAllData = async (isMounted: boolean = true) => {
+    try {
+      // Load profile
+      const res = await apiService.auth.getProfile();
+      console.log('🔎 Profile response:', JSON.stringify(res, null, 2));
+      if (res?.success && isMounted) {
+        const raw = res.data as any;
+        const candidateSources = [
+          raw,
+          raw?.data,
+          raw?.profile,
+          raw?.user,
+        ];
+
+        let name: string = '';
+        let userId: string | undefined;
+        let addr: string | undefined;
+        for (const src of candidateSources) {
+          if (!src) continue;
+          const candidate =
+            src.fullName ||
+            src.name ||
+            src.username ||
+            src.userName ||
+            src.displayName ||
+            src.customerName ||
+            src.firstName ||
+            src.email;
+          if (typeof candidate === 'string' && candidate.trim()) {
+            name = candidate.trim();
+          }
+
+          const possUserId = src.userId || src._id || src.id;
+          if (!userId && typeof possUserId === 'string') {
+            userId = possUserId;
+          }
+
+          const addrCandidate = src.address || src.location || src.city;
+          if (!addr && typeof addrCandidate === 'string' && addrCandidate.trim()) {
+            addr = addrCandidate.trim();
+          }
+        }
+
+        setDisplayName(name);
+        if (userId) setUserIdState(userId);
+
+        // Prefer address from profile if present
+        if (addr) {
+          setAddress(addr);
+        } else if (userId) {
+          try {
+            const cust = await apiService.raw.get(`/customers/user/${userId}`);
+            if (cust?.success) {
+              const c = (cust.data as any) || {};
+              if (typeof c.address === 'string') setAddress(c.address);
+              if (typeof c._id === 'string') setCustomerId(c._id);
+            }
+          } catch (e) {
+            // ignore
+          }
+        }
+
+        // Ensure we have customer id even if address was present
+        if (userId && !customerId) {
+          try {
+            const cust = await apiService.raw.get(`/customers/user/${userId}`);
+            if (cust?.success) {
+              const c = (cust.data as any) || {};
+              if (typeof c._id === 'string') setCustomerId(c._id);
+            }
+          } catch {}
+        }
+      }
+    } catch (e) {
+      // Silently ignore; greeting will fallback
+    }
+
+    // Load service packages for banner
+    try {
+      const res = await apiService.servicePackages.getAll();
+      if (res?.success && isMounted) {
+        const items = Array.isArray((res as any).data) ? (res as any).data : [];
+        setServicePackages(items);
+      }
+    } catch (e) {
+      // ignore banner fetch errors
+    }
+
+    // Load auto parts for selection grid
+    try {
+      const res = await apiService.autoParts.getAll({ page: 1, limit: 12 });
+      if (isMounted && res?.success) {
+        const payload: any = (res as any).data || {};
+        const items = Array.isArray(payload?.parts) ? payload.parts : Array.isArray(payload) ? payload : [];
+        setAutoParts(items);
+      }
+    } catch {}
+
+    // preload my vehicles (lazy on open as fallback)
+    try {
+      setIsLoadingVehicles(true);
+      const res = await apiService.vehicles.getMyVehicles();
+      if (isMounted && res?.success) {
+        const list = Array.isArray((res as any).data) ? (res as any).data : [];
+        setVehicles(list);
+      }
+    } finally {
+      if (isMounted) setIsLoadingVehicles(false);
+    }
+  };
+
   useEffect(() => {
     let isMounted = true;
-    const loadProfile = async () => {
-      try {
-        const res = await apiService.auth.getProfile();
-        console.log('🔎 Profile response:', JSON.stringify(res, null, 2));
-        if (res?.success && isMounted) {
-          const raw = res.data as any;
-          const candidateSources = [
-            raw,
-            raw?.data,
-            raw?.profile,
-            raw?.user,
-          ];
-
-          let name: string = '';
-          let userId: string | undefined;
-          let addr: string | undefined;
-          for (const src of candidateSources) {
-            if (!src) continue;
-            const candidate =
-              src.fullName ||
-              src.name ||
-              src.username ||
-              src.userName ||
-              src.displayName ||
-              src.customerName ||
-              src.firstName ||
-              src.email;
-            if (typeof candidate === 'string' && candidate.trim()) {
-              name = candidate.trim();
-            }
-
-            const possUserId = src.userId || src._id || src.id;
-            if (!userId && typeof possUserId === 'string') {
-              userId = possUserId;
-            }
-
-            const addrCandidate = src.address || src.location || src.city;
-            if (!addr && typeof addrCandidate === 'string' && addrCandidate.trim()) {
-              addr = addrCandidate.trim();
-            }
-          }
-
-          setDisplayName(name);
-          if (userId) setUserIdState(userId);
-
-          // Prefer address from profile if present
-          if (addr) {
-            setAddress(addr);
-          } else if (userId) {
-            try {
-              const cust = await apiService.raw.get(`/customers/user/${userId}`);
-              if (cust?.success) {
-                const c = (cust.data as any) || {};
-                if (typeof c.address === 'string') setAddress(c.address);
-                if (typeof c._id === 'string') setCustomerId(c._id);
-              }
-            } catch (e) {
-              // ignore
-            }
-          }
-
-          // Ensure we have customer id even if address was present
-          if (userId && !customerId) {
-            try {
-              const cust = await apiService.raw.get(`/customers/user/${userId}`);
-              if (cust?.success) {
-                const c = (cust.data as any) || {};
-                if (typeof c._id === 'string') setCustomerId(c._id);
-              }
-            } catch {}
-          }
-        }
-      } catch (e) {
-        // Silently ignore; greeting will fallback
-      }
-    };
-    loadProfile();
-    // Load service packages for banner
-    const loadPackages = async () => {
-      try {
-        const res = await apiService.servicePackages.getAll();
-        if (res?.success && isMounted) {
-          const items = Array.isArray((res as any).data) ? (res as any).data : [];
-          setServicePackages(items);
-        }
-      } catch (e) {
-        // ignore banner fetch errors
-      }
-    };
-    loadPackages();
-    // Load auto parts for selection grid
-    const loadParts = async () => {
-      try {
-        const res = await apiService.autoParts.getAll({ page: 1, limit: 12 });
-        if (isMounted && res?.success) {
-          const payload: any = (res as any).data || {};
-          const items = Array.isArray(payload?.parts) ? payload.parts : Array.isArray(payload) ? payload : [];
-          setAutoParts(items);
-        }
-      } catch {}
-    };
-    loadParts();
-    // preload my vehicles (lazy on open as fallback)
-    const preloadVehicles = async () => {
-      try {
-        setIsLoadingVehicles(true);
-        const res = await apiService.vehicles.getMyVehicles();
-        if (isMounted && res?.success) {
-          const list = Array.isArray((res as any).data) ? (res as any).data : [];
-          setVehicles(list);
-        }
-      } finally {
-        if (isMounted) setIsLoadingVehicles(false);
-      }
-    };
-    preloadVehicles();
+    loadAllData(isMounted);
     return () => {
       isMounted = false;
     };
@@ -354,6 +352,18 @@ export default function HomeScreen() {
     }
   };
 
+  const handleRefresh = async () => {
+    try {
+      setIsRefreshing(true);
+      await loadAllData(true);
+      toast.success('Data refreshed successfully!');
+    } catch (error) {
+      toast.error('Failed to refresh data');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   const handleLogout = async () => {
     Alert.alert(
       'Đăng xuất',
@@ -414,10 +424,18 @@ export default function HomeScreen() {
             <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
               <Ionicons name="log-out" size={24} color="#FF4444" />
             </TouchableOpacity>
-            <Image
-              source={{ uri: 'https://via.placeholder.com/50x50/4A90E2/FFFFFF?text=K' }}
-              style={styles.profileImage}
-            />
+            <TouchableOpacity 
+              style={styles.refreshButton} 
+              onPress={handleRefresh}
+              disabled={isRefreshing}
+            >
+              <Ionicons 
+                name="reload" 
+                size={22} 
+                color={isRefreshing ? "#999" : "#4A90E2"} 
+                style={isRefreshing ? styles.spinning : undefined}
+              />
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -689,6 +707,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
+  refreshButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#E3F2FD',
+  },
   logoutButton: {
     width: 40,
     height: 40,
@@ -696,6 +722,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#FFE0E0',
+  },
+  spinning: {
+    // Note: For actual spinning animation, you'd need Animated API
+    // This is a placeholder style
   },
   greeting: {
     fontSize: 24,
@@ -711,11 +741,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginRight: 4,
-  },
-  profileImage: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
   },
   searchContainer: {
     flexDirection: 'row',

@@ -69,42 +69,42 @@ export default function RecordsScreen() {
       </View>
 
       {loading ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <ActivityIndicator />
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#4A90E2" />
+        </View>
+      ) : records.length === 0 ? (
+        <View style={styles.centerContainer}>
+          <Text style={styles.emptyText}>No records</Text>
         </View>
       ) : (
         <ScrollView style={styles.content}>
-          {records.length === 0 ? (
-            <Text style={{ textAlign: 'center', color: '#666' }}>No records</Text>
-          ) : (
-            records.map((record) => (
-              <TouchableOpacity
-                key={record.id}
-                style={styles.recordItem}
-                onPress={() => router.push({ pathname: '/record-details', params: { appointmentId: String(record.id) } })}
-              >
-                <View style={styles.recordLeft}>
-                  <View style={styles.serviceIcon}>
-                    <Ionicons name="calendar" size={20} color="#4A90E2" />
-                  </View>
-                  <View style={styles.recordInfo}>
-                    <Text style={styles.serviceName}>{record.centerName}</Text>
-                    {!!record.vehicleName && <Text style={styles.vehicleName}>{record.vehicleName}</Text>}
-                    <Text style={styles.serviceDate}>
-                      {record.dateStr} {record.timeRange ? `• ${record.timeRange}` : ''}
-                    </Text>
-                  </View>
+          {records.map((record) => (
+            <TouchableOpacity
+              key={record.id}
+              style={styles.recordItem}
+              onPress={() => router.push({ pathname: '/record-details', params: { appointmentId: String(record.id) } })}
+            >
+              <View style={styles.recordLeft}>
+                <View style={styles.serviceIcon}>
+                  <Ionicons name="calendar" size={20} color="#4A90E2" />
                 </View>
-                <View style={styles.recordRight}>
-                  <View style={[styles.statusContainer, record.status === 'cancelled' ? { backgroundColor: '#FEE2E2' } : record.status === 'completed' ? { backgroundColor: '#E8F5E8' } : {}]}>
-                    <Text style={[styles.status, record.status === 'cancelled' ? { color: '#DC2626' } : record.status === 'completed' ? { color: '#4CAF50' } : { color: '#1E3A8A' }]}>
-                      {String(record.status).toUpperCase()}
-                    </Text>
-                  </View>
+                <View style={styles.recordInfo}>
+                  <Text style={styles.serviceName}>{record.centerName}</Text>
+                  {!!record.vehicleName && <Text style={styles.vehicleName}>{record.vehicleName}</Text>}
+                  <Text style={styles.serviceDate}>
+                    {record.dateStr} {record.timeRange ? `• ${record.timeRange}` : ''}
+                  </Text>
                 </View>
-              </TouchableOpacity>
-            ))
-          )}
+              </View>
+              <View style={styles.recordRight}>
+                <View style={[styles.statusContainer, record.status === 'cancelled' ? { backgroundColor: '#FEE2E2' } : record.status === 'completed' ? { backgroundColor: '#E8F5E8' } : {}]}>
+                  <Text style={[styles.status, record.status === 'cancelled' ? { color: '#DC2626' } : record.status === 'completed' ? { color: '#4CAF50' } : { color: '#1E3A8A' }]}>
+                    {String(record.status).toUpperCase()}
+                  </Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          ))}
         </ScrollView>
       )}
     </SafeAreaView>
@@ -135,6 +135,16 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: 20,
+  },
+  centerContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyText: {
+    fontSize: 18,
+    color: '#999',
+    fontWeight: '500',
   },
   recordItem: {
     flexDirection: 'row',

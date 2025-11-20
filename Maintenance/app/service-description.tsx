@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useApiService } from '@/hooks/useApiService';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { toast } from 'sonner-native';
 
 const { width } = Dimensions.get('window');
 
@@ -221,6 +222,9 @@ export default function ServiceDescriptionScreen() {
       };
       const res = await apiService.raw.post('/appointments', body);
       if (res?.success !== false) {
+        // Show success toast
+        toast.success('Booking placed successfully!');
+        
         setShowDateTimeModal(false);
         router.replace('/booking-success');
       } else {
@@ -544,8 +548,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 16,
-    paddingTop: 40,
+    paddingVertical: 8,
+    paddingTop: 16,
   },
   headerTitle: {
     fontSize: 18,
@@ -558,11 +562,17 @@ const styles = StyleSheet.create({
   imageContainer: {
     position: 'relative',
     marginHorizontal: 20,
-    marginBottom: 20,
+    marginTop: 8,
+    marginBottom: 16,
+    height: 300,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   serviceImage: {
     width: '100%',
-    height: 200,
+    height: '100%',
     borderRadius: 12,
   },
   priceBadge: {
@@ -595,7 +605,7 @@ const styles = StyleSheet.create({
   },
   descriptionContainer: {
     paddingHorizontal: 20,
-    marginBottom: 20,
+    marginBottom: 16,
   },
   descriptionHeader: {
     flexDirection: 'row',
@@ -658,7 +668,7 @@ const styles = StyleSheet.create({
   },
   vehicleInfoContainer: {
     paddingHorizontal: 20,
-    marginBottom: 100,
+    marginBottom: 80,
   },
   vehicleInfoTitle: {
     fontSize: 18,
