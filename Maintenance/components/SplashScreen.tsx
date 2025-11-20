@@ -46,7 +46,7 @@ export default function SplashScreenComponent({ onFinish }: SplashScreenProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1e3a8a', // Xanh nước biển đậm
+    backgroundColor: '#16A34A', // Xanh lá cây đậm
     justifyContent: 'center',
     alignItems: 'center',
     width: width,

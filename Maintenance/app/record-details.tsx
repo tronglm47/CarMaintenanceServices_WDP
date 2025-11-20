@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, Stack } from 'expo-router';
+import { useLocalSearchParams, Stack, router } from 'expo-router';
 import { useApiService } from '@/hooks/useApiService';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function RecordDetailsScreen() {
   const { appointmentId } = useLocalSearchParams<{ appointmentId?: string }>();
@@ -148,16 +149,30 @@ export default function RecordDetailsScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
+      
+      {/* Custom Header */}
+      <View style={styles.customHeader}>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => router.back()}
+        >
+          <Ionicons name="arrow-back" size={24} color="#111827" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Service Details</Text>
+        <View style={{ width: 40 }} />
+      </View>
+
       {loading ? (
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color="#4A90E2" />
         </View>
       ) : records.length === 0 ? (
         <View style={styles.centerContainer}>
+          <Ionicons name="document-text-outline" size={64} color="#D1D5DB" />
           <Text style={styles.emptyText}>No record data</Text>
         </View>
       ) : (
-        <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 24, paddingTop: 12 }}>
+        <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 32 }}>
           {(
           records.map((rec: any, idx: number) => {
             const title = rec?.name || rec?.title || `Record ${idx + 1}`;
@@ -251,35 +266,63 @@ export default function RecordDetailsScreen() {
                 </View>
 
                 {/* Customer Section */}
-                <Text style={styles.sectionTitle}>Customer</Text>
-                <View style={styles.section}>
-                  {renderRow('Name', resolve(customer, [rec], ['customerName', 'name']))}
-                  {renderRow('Address', resolve(customer, [rec], ['address']))}
-                  {renderRow('Date of Birth', formatDate(resolve(customer, [rec], ['dateOfBirth', 'dob']) as string))}
+                <View style={styles.sectionContainer}>
+                  <View style={styles.sectionHeader}>
+                    <View style={styles.iconWrapper}>
+                      <Ionicons name="person" size={20} color="#4A90E2" />
+                    </View>
+                    <Text style={styles.sectionTitle}>Customer</Text>
+                  </View>
+                  <View style={styles.section}>
+                    {renderRow('Name', resolve(customer, [rec], ['customerName', 'name']), 'person-outline')}
+                    {renderRow('Address', resolve(customer, [rec], ['address']), 'location-outline')}
+                    {renderRow('Date of Birth', formatDate(resolve(customer, [rec], ['dateOfBirth', 'dob']) as string), 'calendar-outline')}
+                  </View>
                 </View>
 
                 {/* Vehicle Section */}
-                <Text style={styles.sectionTitle}>Vehicle</Text>
-                <View style={styles.section}>
-                  {renderRow('Vehicle Name', resolve(vehicle, [rec], ['vehicleName']) || vehicleNameById[(vehicle as any)?._id || (vehicle as any)?.id || ''])}
-                  {renderRow('Model', resolve(vehicle, [rec], ['model']))}
-                  {renderRow('Mileage', String(resolve(vehicle, [rec], ['mileage']) ?? ''))}
-                  {renderRow('Plate Number', resolve(vehicle, [rec], ['plateNumber', 'licensePlate']))}
+                <View style={styles.sectionContainer}>
+                  <View style={styles.sectionHeader}>
+                    <View style={styles.iconWrapper}>
+                      <Ionicons name="car-sport" size={20} color="#10B981" />
+                    </View>
+                    <Text style={styles.sectionTitle}>Vehicle</Text>
+                  </View>
+                  <View style={styles.section}>
+                    {renderRow('Vehicle Name', resolve(vehicle, [rec], ['vehicleName']) || vehicleNameById[(vehicle as any)?._id || (vehicle as any)?.id || ''], 'car')}
+                    {renderRow('Model', resolve(vehicle, [rec], ['model']), 'construct-outline')}
+                    {renderRow('Mileage', String(resolve(vehicle, [rec], ['mileage']) ?? ''), 'speedometer-outline')}
+                    {renderRow('Plate Number', resolve(vehicle, [rec], ['plateNumber', 'licensePlate']), 'card-outline')}
+                  </View>
                 </View>
 
                 {/* Service Center Section */}
-                <Text style={styles.sectionTitle}>Service Center</Text>
-                <View style={styles.section}>
-                  {renderRow('Center Name', resolve(center, [rec], ['name', 'centerName']) || centerNameById[(center as any)?._id || (center as any)?.id || ''])}
-                  {renderRow('Address', resolve(center, [rec], ['address']))}
-                  {renderRow('Phone Number', resolve(center, [rec], ['phone', 'phoneNumber']))}
+                <View style={styles.sectionContainer}>
+                  <View style={styles.sectionHeader}>
+                    <View style={styles.iconWrapper}>
+                      <Ionicons name="business" size={20} color="#F59E0B" />
+                    </View>
+                    <Text style={styles.sectionTitle}>Service Center</Text>
+                  </View>
+                  <View style={styles.section}>
+                    {renderRow('Center Name', resolve(center, [rec], ['name', 'centerName']) || centerNameById[(center as any)?._id || (center as any)?.id || ''], 'storefront-outline')}
+                    {renderRow('Address', resolve(center, [rec], ['address']), 'navigate-outline')}
+                    {renderRow('Phone Number', resolve(center, [rec], ['phone', 'phoneNumber']), 'call-outline')}
+                  </View>
                 </View>
 
                 {/* Technician Section */}
-                <Text style={styles.sectionTitle}>Technician</Text>
-                <View style={styles.section}>
-                  {renderRow('Name', resolve(technician, [rec], ['name']))}
-                  {renderRow('Email', email || resolve(technician, [rec], ['email']))}
+                <View style={styles.sectionContainer}>
+                  <View style={styles.sectionHeader}>
+                    <View style={styles.iconWrapper}>
+                      <Ionicons name="build" size={20} color="#8B5CF6" />
+                    </View>
+                    <Text style={styles.sectionTitle}>Technician</Text>
+                  </View>
+                  <View style={styles.section}>
+                    {renderRow('Name', resolve(technician, [rec], ['name']), 'person-outline')}
+                    {renderRow('Email', email || resolve(technician, [rec], ['email']), 'mail-outline')}
+                  </View>
                 </View>
 
                 {/* Checklist Section */}
@@ -288,8 +331,13 @@ export default function RecordDetailsScreen() {
                   const lists = checklistsByRecord[rid] || [];
                   if (!lists.length) return null;
                   return (
-                    <View style={{ marginTop: 10 }}>
-                      <Text style={styles.sectionTitle}>Checklist</Text>
+                    <View style={styles.sectionContainer}>
+                      <View style={styles.sectionHeader}>
+                        <View style={styles.iconWrapper}>
+                          <Ionicons name="checkmark-circle" size={20} color="#EF4444" />
+                        </View>
+                        <Text style={styles.sectionTitle}>Checklist</Text>
+                      </View>
                       {lists.map((it: any, idx2: number) => {
                         const cname = it?.checklist_id?.name || `Checklist ${idx2 + 1}`;
                         const cstatus = String(it?.status || '').toLowerCase();
@@ -338,8 +386,13 @@ export default function RecordDetailsScreen() {
                 })()}
 
                 {items.length > 0 && (
-                  <View style={{ marginTop: 8 }}>
-                    <Text style={styles.sectionTitle}>Parts/Items</Text>
+                  <View style={styles.sectionContainer}>
+                    <View style={styles.sectionHeader}>
+                      <View style={styles.iconWrapper}>
+                        <Ionicons name="cube" size={20} color="#06B6D4" />
+                      </View>
+                      <Text style={styles.sectionTitle}>Parts/Items</Text>
+                    </View>
                     {items.map((it: any, j: number) => {
                       const name = it?.name || it?.partName || `Item ${j + 1}`;
                       const qty = it?.quantity || it?.qty || it?.recommended_qty;
@@ -368,55 +421,195 @@ export default function RecordDetailsScreen() {
   );
 }
 
-function renderRow(label?: string, value?: string) {
+function renderRow(label?: string, value?: string, icon?: string) {
   if (!label) return null;
   const display = (value && String(value).trim()) ? String(value) : '-';
   return (
     <View style={styles.row}>
-      <Text style={styles.rowLabel}>{label}</Text>
+      <View style={styles.rowLeft}>
+        {icon && <Ionicons name={icon as any} size={16} color="#9CA3AF" style={{ marginRight: 8 }} />}
+        <Text style={styles.rowLabel}>{label}</Text>
+      </View>
       <Text style={[styles.rowValue, display === '-' && { color: '#9CA3AF' }]}>{display}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFFFF' },
-  content: { paddingHorizontal: 16 },
+  container: { 
+    flex: 1, 
+    backgroundColor: '#F9FAFB',
+  },
+  customHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  content: { 
+    paddingHorizontal: 16,
+    paddingTop: 16,
+  },
   centerContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 12,
   },
   emptyText: {
-    fontSize: 18,
-    color: '#999',
-    fontWeight: '500',
+    fontSize: 16,
+    color: '#9CA3AF',
+    fontWeight: '600',
   },
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  cardHeader: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  cardTitle: { 
+    fontSize: 18, 
+    fontWeight: '800', 
+    color: '#111827',
+  },
+  badge: { 
+    paddingHorizontal: 12, 
+    paddingVertical: 6, 
+    borderRadius: 999,
+  },
+  badgeText: { 
+    fontSize: 11, 
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  sectionContainer: {
+    marginBottom: 20,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 12,
   },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  cardTitle: { fontSize: 16, fontWeight: '700', color: '#111827' },
-  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
-  badgeText: { fontSize: 12, fontWeight: '700' },
-  section: { marginTop: 6 },
-  row: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 },
-  rowLabel: { color: '#6B7280', fontSize: 12 },
-  rowValue: { color: '#111827', fontWeight: '600', fontSize: 13, marginLeft: 12, flexShrink: 1, textAlign: 'right' },
-  sectionTitle: { color: '#374151', fontWeight: '700', marginTop: 8 },
-  checkCard: { borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 8, padding: 8, marginTop: 6, backgroundColor: '#FFFFFF' },
-  checkHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  checkTitle: { color: '#111827', fontWeight: '700' },
-  subTitle: { color: '#374151', fontWeight: '700', marginBottom: 4 },
-  noteText: { color: '#4B5563', fontSize: 12, marginTop: 4 },
-  itemRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
-  itemName: { color: '#111827', fontWeight: '600' },
-  itemMeta: { color: '#6B7280', fontSize: 12, marginTop: 2 },
+  iconWrapper: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  section: { 
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 12,
+  },
+  row: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    paddingVertical: 10,
+  },
+  rowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  rowLabel: { 
+    color: '#6B7280', 
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  rowValue: { 
+    color: '#111827', 
+    fontWeight: '600', 
+    fontSize: 13, 
+    marginLeft: 12, 
+    flexShrink: 1, 
+    textAlign: 'right',
+  },
+  sectionTitle: { 
+    color: '#111827', 
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  checkCard: { 
+    borderWidth: 1, 
+    borderColor: '#E5E7EB', 
+    borderRadius: 12, 
+    padding: 12, 
+    marginTop: 8, 
+    backgroundColor: '#FFFFFF',
+  },
+  checkHeader: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  checkTitle: { 
+    color: '#111827', 
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  subTitle: { 
+    color: '#374151', 
+    fontWeight: '700', 
+    marginBottom: 6,
+    fontSize: 14,
+  },
+  noteText: { 
+    color: '#6B7280', 
+    fontSize: 13, 
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  itemRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingVertical: 12, 
+    backgroundColor: '#F9FAFB',
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginBottom: 6,
+  },
+  itemName: { 
+    color: '#111827', 
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  itemMeta: { 
+    color: '#6B7280', 
+    fontSize: 12, 
+    marginTop: 3,
+  },
 });
 
 

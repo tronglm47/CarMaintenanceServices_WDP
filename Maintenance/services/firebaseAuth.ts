@@ -216,11 +216,23 @@ class ReactNativeFirebaseAuthService {
                 // Continue with Firebase logout even if backend logout fails
             }
 
-            // Sign out from Firebase
-            await auth().signOut();
+            // Sign out from Firebase only if user is signed in
+            const currentUser = auth().currentUser;
+            if (currentUser) {
+                await auth().signOut();
+                console.log('Firebase logout successful');
+            } else {
+                console.log('No Firebase user to sign out (email/password login)');
+            }
+            
             this.confirmationResult = null;
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error signing out:', error);
+            // Don't throw error if it's just "no current user"
+            if (error?.code === 'auth/no-current-user') {
+                console.log('No Firebase user found, continuing with logout...');
+                return;
+            }
             throw new Error('Không thể đăng xuất. Vui lòng thử lại.');
         }
     }

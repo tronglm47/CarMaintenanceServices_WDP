@@ -237,7 +237,10 @@ export default function ServiceDescriptionScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <ScrollView style={styles.scrollView}>
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+      >
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()}>
@@ -538,10 +541,15 @@ function DateMonthGrid({ selectedDate, onSelect }: { selectedDate?: string; onSe
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F0FDF4',
   },
   scrollView: {
     flex: 1,
+    backgroundColor: '#F0FDF4',
+  },
+  scrollContent: {
+    backgroundColor: '#F0FDF4',
+    paddingBottom: 20,
   },
   header: {
     flexDirection: 'row',
@@ -550,6 +558,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 8,
     paddingTop: 16,
+    backgroundColor: '#F0FDF4',
   },
   headerTitle: {
     fontSize: 18,

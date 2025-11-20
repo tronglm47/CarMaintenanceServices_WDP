@@ -25,6 +25,7 @@ export default function LoginScreen() {
   const [mode, setMode] = useState<'phone' | 'email'>('phone');
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const api = useApiService();
   const { login } = useAuth();
   const { requestPushToken } = useNotification();
@@ -32,14 +33,14 @@ export default function LoginScreen() {
   const handleSendOTP = async () => {
     // Validate phone number
     if (!phoneNumber.trim()) {
-      Alert.alert('Lỗi', 'Vui lòng nhập số điện thoại');
+      Alert.alert('Error', 'Please enter phone number');
       return;
     }
 
     // Basic phone number validation (Vietnamese format)
     const phoneRegex = /^(\+84|84|0)[1-9][0-9]{8}$/;
     if (!phoneRegex.test(phoneNumber.replace(/\s/g, ''))) {
-      Alert.alert('Lỗi', 'Số điện thoại không hợp lệ');
+      Alert.alert('Error', 'Invalid phone number');
       return;
     }
 
@@ -57,10 +58,10 @@ export default function LoginScreen() {
           params: { phoneNumber: phoneNumber }
         });
       } else {
-        Alert.alert('Lỗi', result.message);
+        Alert.alert('Error', result.message);
       }
     } catch (error) {
-      Alert.alert('Lỗi', error instanceof Error ? error.message : 'Không thể gửi OTP. Vui lòng thử lại.');
+      Alert.alert('Error', error instanceof Error ? error.message : 'Unable to send OTP. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -93,17 +94,17 @@ export default function LoginScreen() {
             {/* Header */}
             <View style={styles.header}>
               <View style={styles.logoContainer}>
-                <Ionicons name="car" size={60} color="#4A90E2" />
+                <Ionicons name="car" size={60} color="#15803D" />
               </View>
               <Text style={styles.title}>Car Maintenance Services</Text>
-              <Text style={styles.subtitle}>Đăng nhập để tiếp tục</Text>
+              <Text style={styles.subtitle}>Login to continue</Text>
             </View>
 
             {mode === 'phone' ? (
               <>
                 {/* Phone Input */}
                 <View style={styles.inputContainer}>
-                  <Text style={styles.inputLabel}>Số điện thoại</Text>
+                  <Text style={styles.inputLabel}>Phone Number</Text>
                   <View style={styles.phoneInputWrapper}>
                     <View style={styles.countryCode}>
                       <Text style={styles.countryCodeText}>+84</Text>
@@ -130,20 +131,20 @@ export default function LoginScreen() {
                     {isLoading ? (
                       <ActivityIndicator color="#fff" />
                     ) : (
-                      <Text style={styles.sendButtonText}>Gửi mã OTP</Text>
+                      <Text style={styles.sendButtonText}>Send OTP</Text>
                     )}
                   </TouchableOpacity>
                 </View>
 
                 {/* Minimal toggle below primary button */}
                 <View style={styles.toggleRow}>
-                  <TouchableOpacity onPress={() => setMode('phone')} style={[styles.toggleBtn, mode === 'phone' && styles.toggleActive]}>
-                    <Ionicons name="call" size={16} color={mode === 'phone' ? '#fff' : '#374151'} />
-                    <Text style={[styles.toggleText, mode === 'phone' && styles.toggleTextActive]}>Số điện thoại</Text>
+                  <TouchableOpacity onPress={() => setMode('phone')} style={[styles.toggleBtn, styles.toggleActive]}>
+                    <Ionicons name="call" size={16} color="#fff" />
+                    <Text style={styles.toggleTextActive}>Phone Number</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={() => setMode('email')} style={[styles.toggleBtn, mode === 'email' && styles.toggleActive]}>
-                    <Ionicons name="mail" size={16} color={mode === 'email' ? '#fff' : '#374151'} />
-                    <Text style={[styles.toggleText, mode === 'email' && styles.toggleTextActive]}>Email</Text>
+                  <TouchableOpacity onPress={() => setMode('email')} style={styles.toggleBtn}>
+                    <Ionicons name="mail" size={16} color="#666" />
+                    <Text style={styles.toggleText}>Email</Text>
                   </TouchableOpacity>
                 </View>
               </>
@@ -162,21 +163,33 @@ export default function LoginScreen() {
                   />
                 </View>
                 <View style={styles.inputContainer}>
-                  <Text style={styles.inputLabel}>Mật khẩu</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="••••••••"
-                    secureTextEntry
-                    value={password}
-                    onChangeText={setPassword}
-                  />
+                  <Text style={styles.inputLabel}>Password</Text>
+                  <View style={styles.passwordInputWrapper}>
+                    <TextInput
+                      style={styles.passwordInput}
+                      placeholder="••••••••"
+                      secureTextEntry={!showPassword}
+                      value={password}
+                      onChangeText={setPassword}
+                    />
+                    <TouchableOpacity
+                      style={styles.eyeIcon}
+                      onPress={() => setShowPassword(!showPassword)}
+                    >
+                      <Ionicons
+                        name={showPassword ? 'eye-off' : 'eye'}
+                        size={20}
+                        color="#666"
+                      />
+                    </TouchableOpacity>
+                  </View>
                 </View>
                 <View style={styles.buttonContainer}>
                   <TouchableOpacity
                     style={[styles.sendButton, isLoading && styles.sendButtonDisabled]}
                     onPress={async () => {
                       if (!identifier || !password) {
-                        Alert.alert('Lỗi', 'Vui lòng nhập email và mật khẩu');
+                        Alert.alert('Error', 'Please enter email and password');
                         return;
                       }
                       setIsLoading(true);
@@ -190,9 +203,12 @@ export default function LoginScreen() {
                         if (!access || !refresh) throw new Error(data?.message || 'Đăng nhập thất bại');
                         await login(access, refresh, role);
                         await requestPushToken();
+                        // Success - no error shown
                         router.replace('/(tabs)');
                       } catch (e: any) {
-                        Alert.alert('Lỗi', e?.message || 'Không thể đăng nhập');
+                        // Only show user-friendly error in Alert, not the axios error
+                        const errorMsg = e?.response?.data?.message || e?.message || 'Incorrect email or password';
+                        Alert.alert('Login Failed', errorMsg);
                       } finally {
                         setIsLoading(false);
                       }
@@ -202,20 +218,20 @@ export default function LoginScreen() {
                     {isLoading ? (
                       <ActivityIndicator color="#fff" />
                     ) : (
-                      <Text style={styles.sendButtonText}>Đăng nhập</Text>
+                      <Text style={styles.sendButtonText}>Login</Text>
                     )}
                   </TouchableOpacity>
                 </View>
 
                 {/* Minimal toggle below primary button */}
                 <View style={styles.toggleRow}>
-                  <TouchableOpacity onPress={() => setMode('phone')} style={[styles.toggleBtn, mode === 'phone' && styles.toggleActive]}>
-                    <Ionicons name="call" size={16} color={mode === 'phone' ? '#fff' : '#374151'} />
-                    <Text style={[styles.toggleText, mode === 'phone' && styles.toggleTextActive]}>Số điện thoại</Text>
+                  <TouchableOpacity onPress={() => setMode('phone')} style={styles.toggleBtn}>
+                    <Ionicons name="call" size={16} color="#666" />
+                    <Text style={styles.toggleText}>Phone Number</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={() => setMode('email')} style={[styles.toggleBtn, mode === 'email' && styles.toggleActive]}>
-                    <Ionicons name="mail" size={16} color={mode === 'email' ? '#fff' : '#374151'} />
-                    <Text style={[styles.toggleText, mode === 'email' && styles.toggleTextActive]}>Email</Text>
+                  <TouchableOpacity onPress={() => setMode('email')} style={[styles.toggleBtn, styles.toggleActive]}>
+                    <Ionicons name="mail" size={16} color="#fff" />
+                    <Text style={styles.toggleTextActive}>Email</Text>
                   </TouchableOpacity>
                 </View>
               </>
@@ -224,10 +240,10 @@ export default function LoginScreen() {
             {/* Footer */}
             <View style={styles.footer}>
               <Text style={styles.footerText}>
-                Bằng cách tiếp tục, bạn đồng ý với{' '}
-                <Text style={styles.linkText}>Điều khoản sử dụng</Text>
-                {' '}và{' '}
-                <Text style={styles.linkText}>Chính sách bảo mật</Text>
+                By continuing, you agree to our{' '}
+                <Text style={styles.linkText}>Terms of Service</Text>
+                {' '}and{' '}
+                <Text style={styles.linkText}>Privacy Policy</Text>
               </Text>
             </View>
           </View>
@@ -320,8 +336,26 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
   },
+  passwordInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 12,
+    backgroundColor: '#F9F9F9',
+  },
+  passwordInput: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: '#333',
+  },
+  eyeIcon: {
+    paddingHorizontal: 12,
+  },
   sendButton: {
-    backgroundColor: '#4A90E2',
+    backgroundColor: '#15803D',
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
@@ -349,7 +383,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   linkText: {
-    color: '#4A90E2',
+    color: '#15803D',
     fontWeight: '600',
   },
   switchRow: {
@@ -397,15 +431,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
   },
   toggleActive: {
-    backgroundColor: '#4A90E2',
-    borderColor: '#4A90E2',
+    backgroundColor: '#15803D',
+    borderColor: '#15803D',
   },
   toggleText: {
     fontSize: 12,
-    color: '#374151',
+    color: '#6B7280',
     fontWeight: '600',
   },
   toggleTextActive: {
+    fontSize: 12,
     color: '#FFFFFF',
+    fontWeight: '700',
   },
 });

@@ -128,7 +128,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
             // Sign out from Firebase and call backend logout endpoint
             // Interceptor will automatically add auth header to the logout request
-            await firebaseAuthService.signOut();
+            try {
+                await firebaseAuthService.signOut();
+            } catch (error) {
+                console.warn('⚠️ Firebase signOut error (continuing with logout):', error);
+                // Continue with logout even if Firebase signOut fails
+            }
 
             // Clear ALL persisted data (including chatConversationId, tokens, etc.)
             try {
@@ -144,9 +149,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             setRefreshToken(null);
             setUserRole(null);
             setUser(null);
+            
+            console.log('✅ Logout completed successfully');
         } catch (error) {
             console.error('Error during logout:', error);
-            throw new Error('Failed to logout');
+            // Even if there's an error, still clear local state to ensure user is logged out
+            setIsAuthenticated(false);
+            setAccessToken(null);
+            setRefreshToken(null);
+            setUserRole(null);
+            setUser(null);
+            try {
+                await AsyncStorage.clear();
+            } catch (e) {
+                // Ignore storage clear errors
+            }
         }
     };
 

@@ -1,56 +1,69 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useApiService } from '@/hooks/useApiService';
 import { router } from 'expo-router';
+import { toast } from 'sonner-native';
 
 export default function RecordsScreen() {
   const api = useApiService();
   const [loading, setLoading] = useState(true);
   const [records, setRecords] = useState<any[]>([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const loadRecords = async (isMounted: boolean = true) => {
+    try {
+      // Resolve customer_id from profile as per backend structure
+      const profile = await api.auth.getProfile();
+      const raw = (profile as any) || {};
+      const payload = raw?.data ?? raw;
+      const custId: string | undefined =
+        (typeof payload?._id === 'string' ? payload._id : undefined) ||
+        payload?.customer_id ||
+        payload?.customerId ||
+        payload?.customer?._id;
+      const customerId = custId;
+      if (!customerId) {
+        setRecords([]);
+        return;
+      }
+      const res = await api.appointments.getAll({ customer_id: customerId });
+      const data: any = (res as any)?.data ?? res;
+      const list: any[] = Array.isArray(data?.appointments)
+        ? data.appointments
+        : Array.isArray(data)
+        ? data
+        : [];
+      const normalized = list.map((a: any) => {
+        const id = a._id || a.id;
+        const center = a.center || a.center_id || {};
+        const centerName = center?.name || a.centerName || 'Service Center';
+        const centerImage = center?.image || center?.image_url || null;
+        const centerAddress = center?.address || '';
+        const vehicleName = a.vehicle?.model || a.vehicle?.name || a.vehicle_id?.model || a.vehicle_id?.name || a.vehicle_plate || a.licensePlate || '';
+        // derive date and time (prefer slot fields, fall back to nested slot object)
+        const slotObj = a.slot || a.slot_id || {};
+        const slotDate = a.slot_date || slotObj.slot_date || a.date || slotObj.date || a.createdAt;
+        const dateStr = slotDate ? new Date(slotDate).toISOString().slice(0, 10) : '';
+        const startStr = a.start_time || a.startTime || slotObj.start_time || slotObj.startTime || a.start || slotObj.start || '';
+        const endStr = a.end_time || a.endTime || slotObj.end_time || slotObj.endTime || a.end || slotObj.end || '';
+        const timeRange = startStr && endStr ? `${startStr} - ${endStr}` : (startStr || '');
+        const status = a.status || 'scheduled';
+        return { id, centerName, centerImage, centerAddress, vehicleName, dateStr, timeRange, status };
+      });
+      if (isMounted) setRecords(normalized);
+    } catch (error) {
+      console.error('Error loading records:', error);
+    }
+  };
 
   useEffect(() => {
     let alive = true;
     const load = async () => {
       setLoading(true);
       try {
-        // Resolve customer_id from profile as per backend structure
-        const profile = await api.auth.getProfile();
-        const raw = (profile as any) || {};
-        const payload = raw?.data ?? raw;
-        const custId: string | undefined =
-          (typeof payload?._id === 'string' ? payload._id : undefined) ||
-          payload?.customer_id ||
-          payload?.customerId ||
-          payload?.customer?._id;
-        const customerId = custId;
-        if (!customerId) {
-          setRecords([]);
-          return;
-        }
-        const res = await api.appointments.getAll({ customer_id: customerId });
-        const data: any = (res as any)?.data ?? res;
-        const list: any[] = Array.isArray(data?.appointments)
-          ? data.appointments
-          : Array.isArray(data)
-          ? data
-          : [];
-        const normalized = list.map((a: any) => {
-          const id = a._id || a.id;
-          const centerName = a.center?.name || a.centerName || a.center_id?.name || 'Service Center';
-          const vehicleName = a.vehicle?.model || a.vehicle?.name || a.vehicle_id?.model || a.vehicle_id?.name || a.vehicle_plate || a.licensePlate || '';
-          // derive date and time (prefer slot fields, fall back to nested slot object)
-          const slotObj = a.slot || a.slot_id || {};
-          const slotDate = a.slot_date || slotObj.slot_date || a.date || slotObj.date || a.createdAt;
-          const dateStr = slotDate ? new Date(slotDate).toISOString().slice(0, 10) : '';
-          const startStr = a.start_time || a.startTime || slotObj.start_time || slotObj.startTime || a.start || slotObj.start || '';
-          const endStr = a.end_time || a.endTime || slotObj.end_time || slotObj.endTime || a.end || slotObj.end || '';
-          const timeRange = startStr && endStr ? `${startStr} - ${endStr}` : (startStr || '');
-          const status = a.status || 'scheduled';
-          return { id, centerName, vehicleName, dateStr, timeRange, status };
-        });
-        if (alive) setRecords(normalized);
+        await loadRecords(alive);
       } finally {
         if (alive) setLoading(false);
       }
@@ -59,52 +72,150 @@ export default function RecordsScreen() {
     return () => { alive = false; };
   }, []);
 
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await loadRecords(true);
+      toast.success('Data refreshed successfully!');
+    } catch (error) {
+      toast.error('Failed to refresh data');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Service Records</Text>
-        <TouchableOpacity style={styles.filterButton}>
-          <Ionicons name="filter" size={20} color="#4A90E2" />
-        </TouchableOpacity>
-      </View>
-
       {loading ? (
         <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#4A90E2" />
+          <ActivityIndicator size="large" color="#22C55E" />
         </View>
       ) : records.length === 0 ? (
-        <View style={styles.centerContainer}>
-          <Text style={styles.emptyText}>No records</Text>
-        </View>
+        <>
+          <View style={styles.header}>
+            <View style={styles.headerContent}>
+              <Text style={styles.headerTitle}>Service Records</Text>
+            </View>
+            <TouchableOpacity 
+              style={[styles.refreshButton, isRefreshing && styles.refreshButtonDisabled]} 
+              onPress={handleRefresh}
+              disabled={isRefreshing}
+            >
+              <Ionicons 
+                name="reload" 
+                size={22} 
+                color={isRefreshing ? "#999" : "#22C55E"} 
+              />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.centerContainer}>
+            <View style={styles.emptyState}>
+              <Ionicons name="calendar-outline" size={64} color="#D1D5DB" />
+              <Text style={styles.emptyText}>No service records yet</Text>
+              <Text style={styles.emptySubtext}>Your service history will appear here</Text>
+            </View>
+          </View>
+        </>
       ) : (
-        <ScrollView style={styles.content}>
-          {records.map((record) => (
+        <ScrollView 
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingBottom: 20 }}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={handleRefresh}
+            colors={['#22C55E']}
+            tintColor="#22C55E"
+            />
+          }
+        >
+          <View style={styles.header}>
+            <View style={styles.headerContent}>
+              <Text style={styles.headerTitle}>Service Records</Text>
+            </View>
+            <TouchableOpacity 
+              style={[styles.refreshButton, isRefreshing && styles.refreshButtonDisabled]} 
+              onPress={handleRefresh}
+              disabled={isRefreshing}
+            >
+              <Ionicons 
+                name="reload" 
+                size={22} 
+                color={isRefreshing ? "#999" : "#22C55E"} 
+              />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.content}>
+          {records.map((record) => {
+            const statusColors = {
+              completed: { bg: '#DCFCE7', text: '#15803D', border: '#86EFAC' },
+              'in-progress': { bg: '#DBEAFE', text: '#1E40AF', border: '#93C5FD' },
+              pending: { bg: '#FEF3C7', text: '#A16207', border: '#FDE68A' },
+              cancelled: { bg: '#FEE2E2', text: '#DC2626', border: '#FCA5A5' },
+            };
+            const statusKey = record.status?.toLowerCase() || 'pending';
+            const statusColor = statusColors[statusKey as keyof typeof statusColors] || statusColors.pending;
+            
+            return (
             <TouchableOpacity
               key={record.id}
-              style={styles.recordItem}
+              style={styles.recordCard}
               onPress={() => router.push({ pathname: '/record-details', params: { appointmentId: String(record.id) } })}
+              activeOpacity={0.7}
             >
-              <View style={styles.recordLeft}>
-                <View style={styles.serviceIcon}>
-                  <Ionicons name="calendar" size={20} color="#4A90E2" />
-                </View>
-                <View style={styles.recordInfo}>
-                  <Text style={styles.serviceName}>{record.centerName}</Text>
-                  {!!record.vehicleName && <Text style={styles.vehicleName}>{record.vehicleName}</Text>}
-                  <Text style={styles.serviceDate}>
-                    {record.dateStr} {record.timeRange ? `• ${record.timeRange}` : ''}
-                  </Text>
+              {/* Center Icon */}
+              <View style={styles.imageContainer}>
+                <View style={styles.placeholderImage}>
+                  <Ionicons name="construct" size={32} color="#22C55E" />
                 </View>
               </View>
-              <View style={styles.recordRight}>
-                <View style={[styles.statusContainer, record.status === 'cancelled' ? { backgroundColor: '#FEE2E2' } : record.status === 'completed' ? { backgroundColor: '#E8F5E8' } : {}]}>
-                  <Text style={[styles.status, record.status === 'cancelled' ? { color: '#DC2626' } : record.status === 'completed' ? { color: '#4CAF50' } : { color: '#1E3A8A' }]}>
-                    {String(record.status).toUpperCase()}
+
+              {/* Content */}
+              <View style={styles.cardContent}>
+                {/* Title and Status */}
+                <View style={styles.cardHeader}>
+                  <Text style={styles.centerName} numberOfLines={2}>
+                    {record.centerName}
                   </Text>
+                  <View style={[styles.statusBadge, { backgroundColor: statusColor.bg, borderColor: statusColor.border }]}>
+                    <Text style={[styles.statusText, { color: statusColor.text }]}>
+                      {String(record.status).toUpperCase()}
+                    </Text>
+                  </View>
                 </View>
+
+                {/* Vehicle Tag */}
+                {!!record.vehicleName && (
+                  <View style={styles.vehicleTag}>
+                    <Ionicons name="car-sport" size={12} color="#6B7280" />
+                    <Text style={styles.vehicleText} numberOfLines={1}>
+                      {record.vehicleName}
+                    </Text>
+                  </View>
+                )}
+
+                {/* Date & Time */}
+                <View style={styles.dateTimeRow}>
+                  <View style={styles.dateTimeItem}>
+                    <Ionicons name="calendar-outline" size={14} color="#6B7280" />
+                    <Text style={styles.dateTimeText}>{record.dateStr}</Text>
+                  </View>
+                  {!!record.timeRange && (
+                    <View style={styles.dateTimeItem}>
+                      <Ionicons name="time-outline" size={14} color="#6B7280" />
+                      <Text style={styles.dateTimeText}>{record.timeRange}</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+
+              {/* Arrow indicator */}
+              <View style={styles.arrowContainer}>
+                <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
               </View>
             </TouchableOpacity>
-          ))}
+          )})}
+          </View>
         </ScrollView>
       )}
     </SafeAreaView>
@@ -114,108 +225,162 @@ export default function RecordsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F0FDF4',
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 20,
+    backgroundColor: '#F0FDF4',
+    position: 'relative',
+  },
+  headerContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#15803D',
+    letterSpacing: -0.5,
+    textAlign: 'center',
   },
-  filterButton: {
-    padding: 8,
+  refreshButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#DCFCE7',
+    position: 'absolute',
+    right: 20,
+    top: 20,
+  },
+  refreshButtonDisabled: {
+    opacity: 0.5,
   },
   content: {
-    flex: 1,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
+    paddingTop: 16,
   },
   centerContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  emptyState: {
+    alignItems: 'center',
+    padding: 32,
+  },
   emptyText: {
     fontSize: 18,
-    color: '#999',
-    fontWeight: '500',
+    color: '#6B7280',
+    fontWeight: '600',
+    marginTop: 16,
   },
-  recordItem: {
+  emptySubtext: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  recordCard: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 16,
     marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#F0F0F0',
+    overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
       height: 2,
     },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
-  recordLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
+  imageContainer: {
+    width: 100,
+    height: 120,
   },
-  serviceIcon: {
-    width: 40,
-    height: 40,
-    backgroundColor: '#F0F8FF',
-    borderRadius: 20,
+  centerImage: {
+    width: '100%',
+    height: '100%',
+  },
+  placeholderImage: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#F3F4F6',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
   },
-  recordInfo: {
+  cardContent: {
     flex: 1,
+    padding: 12,
+    justifyContent: 'space-between',
   },
-  serviceName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
+  cardHeader: {
+    marginBottom: 8,
   },
-  serviceDate: {
-    fontSize: 14,
-    color: '#666',
+  centerName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#111827',
+    lineHeight: 20,
+    marginBottom: 6,
   },
-  vehicleName: {
-    fontSize: 14,
-    color: '#4B5563',
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  recordRight: {
-    alignItems: 'flex-end',
-  },
-  amount: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 4,
-  },
-  statusContainer: {
-    backgroundColor: '#E8F5E8',
+  vehicleTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F3F4F6',
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+    marginBottom: 8,
   },
-  status: {
+  vehicleText: {
     fontSize: 12,
-    color: '#4CAF50',
+    color: '#6B7280',
+    fontWeight: '600',
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignSelf: 'flex-start',
+    marginTop: 4,
+  },
+  statusText: {
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  dateTimeRow: {
+    flexDirection: 'row',
+    gap: 12,
+    flexWrap: 'wrap',
+  },
+  dateTimeItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  dateTimeText: {
+    fontSize: 12,
+    color: '#6B7280',
     fontWeight: '500',
+  },
+  arrowContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingRight: 12,
   },
 });

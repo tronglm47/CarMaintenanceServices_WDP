@@ -11,7 +11,9 @@ import {
   Alert,
   Modal,
   FlatList,
-  ActivityIndicator
+  ActivityIndicator,
+  RefreshControl,
+  TouchableWithoutFeedback
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +23,17 @@ import { useApiService } from '@/hooks/useApiService';
 import { toast } from 'sonner-native';
 
 const { width } = Dimensions.get('window');
+
+// Map package names to images
+const getPackageImage = (packageName: string) => {
+  const name = packageName?.toLowerCase() || '';
+  if (name.includes('basic')) return require('@/assets/images/basicpackage.png');
+  if (name.includes('standard')) return require('@/assets/images/standardpackage.png');
+  if (name.includes('comprehensive') || name.includes('comprehensiv')) return require('@/assets/images/comprehensivpackage.png');
+  if (name.includes('premium')) return require('@/assets/images/premiumperiodicpackage.png');
+  // Default fallback
+  return require('@/assets/images/basicpackage.png');
+};
 
 export default function HomeScreen() {
   const { logout } = useAuth();
@@ -410,6 +423,14 @@ export default function HomeScreen() {
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            colors={['#22C55E']}
+            tintColor="#22C55E"
+          />
+        }
       >
         {/* Header */}
         <View style={styles.header}>
@@ -425,15 +446,14 @@ export default function HomeScreen() {
               <Ionicons name="log-out" size={24} color="#FF4444" />
             </TouchableOpacity>
             <TouchableOpacity 
-              style={styles.refreshButton} 
+              style={[styles.refreshButton, isRefreshing && styles.refreshButtonDisabled]} 
               onPress={handleRefresh}
               disabled={isRefreshing}
             >
               <Ionicons 
                 name="reload" 
                 size={22} 
-                color={isRefreshing ? "#999" : "#4A90E2"} 
-                style={isRefreshing ? styles.spinning : undefined}
+                color={isRefreshing ? "#999" : "#22C55E"}
               />
             </TouchableOpacity>
           </View>
@@ -458,55 +478,32 @@ export default function HomeScreen() {
               pagingEnabled
             >
               {servicePackages.map((pkg) => (
-                <TouchableOpacity key={pkg._id} activeOpacity={0.9} onPress={() => onPressPackage(pkg)}>
-                <View style={[styles.banner, { width: width - 40 }] }>
-                  <View style={styles.bannerLeft}>
-                    <Text style={styles.bannerTitle}>{pkg?.name || 'Service Package'}</Text>
-                    <Text style={styles.bannerPrice}>START FROM {formatVnd(pkg?.price)} VNĐ</Text>
-                    <TouchableOpacity style={styles.bookButton} onPress={() => onPressPackage(pkg)}>
-                      <Text style={styles.bookButtonText}>BOOK NOW</Text>
-                    </TouchableOpacity>
-                  </View>
-                  <View style={styles.bannerRight}>
-                    <View style={styles.bannerGraphic}>
-                      <View style={styles.iconRow}>
-                        <View style={styles.badgeIcon}><Ionicons name="water" size={16} color="#1E3A8A" /></View>
-                        <View style={styles.badgeIcon}><Ionicons name="disc" size={16} color="#1E3A8A" /></View>
-                        <View style={styles.badgeIcon}><Ionicons name="flask" size={16} color="#1E3A8A" /></View>
-                      </View>
-                      <Ionicons style={styles.carIcon} name="car" size={64} color="#FF4444" />
-                    </View>
-                  </View>
-                </View>
+                <TouchableOpacity 
+                  key={pkg._id} 
+                  activeOpacity={0.9} 
+                  onPress={() => onPressPackage(pkg)}
+                  style={{ width: width - 40, marginRight: 0 }}
+                >
+                  <Image
+                    source={getPackageImage(pkg?.name)}
+                    style={styles.packageImage}
+                    resizeMode="cover"
+                  />
                 </TouchableOpacity>
               ))}
             </ScrollView>
           ) : (
-            <TouchableOpacity activeOpacity={0.9} onPress={() => firstPackage && onPressPackage(firstPackage)}>
-            <View style={styles.banner}>
-              <View style={styles.bannerLeft}>
-                <Text style={styles.bannerTitle}>{firstPackage?.name || 'BASIC SERVICE & MAINTENANCE'}</Text>
-                <Text style={styles.bannerPrice}>
-                  {firstPackage?.price ? `START FROM ${formatVnd(firstPackage.price)} VNĐ` : 'START FROM ₹199'}
-                </Text>
-                <TouchableOpacity style={styles.bookButton} onPress={() => firstPackage && onPressPackage(firstPackage)}>
-                  <Text style={styles.bookButtonText}>BOOK NOW</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.bannerRight}>
-                <View style={styles.bannerGraphic}>
-                  <View style={styles.iconRow}>
-                    <View style={styles.badgeIcon}><Ionicons name="water" size={16} color="#1E3A8A" /></View>
-                    <View style={styles.badgeIcon}><Ionicons name="disc" size={16} color="#1E3A8A" /></View>
-                    <View style={styles.badgeIcon}><Ionicons name="flask" size={16} color="#1E3A8A" /></View>
-                  </View>
-                  <Ionicons style={styles.carIcon} name="car" size={64} color="#FF4444" />
-                </View>
-              </View>
-            </View>
+            <TouchableOpacity 
+              activeOpacity={0.9} 
+              onPress={() => firstPackage && onPressPackage(firstPackage)}
+            >
+              <Image
+                source={getPackageImage(firstPackage?.name || 'basic')}
+                style={styles.packageImage}
+                resizeMode="cover"
+              />
             </TouchableOpacity>
           )}
-          {/* Dots are optional; keep a static look for now */}
         </View>
 
         {/* Vehicle Select Modal */}
@@ -516,34 +513,38 @@ export default function HomeScreen() {
           animationType="slide"
           onRequestClose={() => setShowVehicleModal(false)}
         >
-          <View style={styles.modalBackdrop}>
-            <View style={styles.modalCard}>
-              <Text style={styles.modalTitle}>Chọn xe để đăng ký gói</Text>
-              {isLoadingVehicles ? (
-                <View style={styles.modalLoader}><ActivityIndicator /></View>
-              ) : (
-                <FlatList
-                  data={vehicles}
-                  keyExtractor={(item) => item._id || item.id}
-                  ItemSeparatorComponent={() => <View style={styles.separator} />}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity style={styles.vehicleRow} onPress={() => handleSelectVehicle(item)} disabled={isSubmitting}>
-                      <Ionicons name="car" size={20} color="#1E3A8A" />
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.vehicleTitle}>{item?.model || item?.name || item?.licensePlate || 'My Vehicle'}</Text>
-                        <Text style={styles.vehicleSub}>{item?.licensePlate || item?.plate || item?._id}</Text>
-                      </View>
-                      <Ionicons name="chevron-forward" size={18} color="#666" />
-                    </TouchableOpacity>
+          <TouchableWithoutFeedback onPress={() => setShowVehicleModal(false)}>
+            <View style={styles.modalBackdrop}>
+              <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
+                <View style={styles.modalCard}>
+                  <Text style={styles.modalTitle}>Chọn xe để đăng ký gói</Text>
+                  {isLoadingVehicles ? (
+                    <View style={styles.modalLoader}><ActivityIndicator /></View>
+                  ) : (
+                    <FlatList
+                      data={vehicles}
+                      keyExtractor={(item) => item._id || item.id}
+                      ItemSeparatorComponent={() => <View style={styles.separator} />}
+                      renderItem={({ item }) => (
+                        <TouchableOpacity style={styles.vehicleRow} onPress={() => handleSelectVehicle(item)} disabled={isSubmitting}>
+                          <Ionicons name="car" size={20} color="#1E3A8A" />
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.vehicleTitle}>{item?.model || item?.name || item?.licensePlate || 'My Vehicle'}</Text>
+                            <Text style={styles.vehicleSub}>{item?.licensePlate || item?.plate || item?._id}</Text>
+                          </View>
+                          <Ionicons name="chevron-forward" size={18} color="#666" />
+                        </TouchableOpacity>
+                      )}
+                      ListEmptyComponent={<Text style={styles.emptyText}>Không có xe nào</Text>}
+                    />
                   )}
-                  ListEmptyComponent={<Text style={styles.emptyText}>Không có xe nào</Text>}
-                />
-              )}
-              <TouchableOpacity style={styles.modalClose} onPress={() => setShowVehicleModal(false)} disabled={isSubmitting}>
-                <Text style={styles.modalCloseText}>Đóng</Text>
-              </TouchableOpacity>
+                  <TouchableOpacity style={styles.modalClose} onPress={() => setShowVehicleModal(false)} disabled={isSubmitting}>
+                    <Text style={styles.modalCloseText}>Đóng</Text>
+                  </TouchableOpacity>
+                </View>
+              </TouchableWithoutFeedback>
             </View>
-          </View>
+          </TouchableWithoutFeedback>
         </Modal>
 
         {/* Payment WebView Modal */}
@@ -667,7 +668,7 @@ export default function HomeScreen() {
                   {part?.image ? (
                     <Image source={{ uri: part.image }} style={{ width: 32, height: 32, borderRadius: 6 }} />
                   ) : (
-                    <Ionicons name="cog" size={24} color="#4A90E2" />
+                    <Ionicons name="cog" size={24} color="#22C55E" />
                   )}
                 </View>
                 <Text style={styles.serviceText} numberOfLines={1}>{part.name}</Text>
@@ -683,7 +684,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F0FDF4',
   },
   scrollView: {
     flex: 1,
@@ -698,6 +699,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 20,
+    backgroundColor: '#F0FDF4',
   },
   headerLeft: {
     flex: 1,
@@ -713,7 +715,10 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#E3F2FD',
+    backgroundColor: '#DCFCE7',
+  },
+  refreshButtonDisabled: {
+    opacity: 0.5,
   },
   logoutButton: {
     width: 40,
@@ -723,14 +728,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#FFE0E0',
   },
-  spinning: {
-    // Note: For actual spinning animation, you'd need Animated API
-    // This is a placeholder style
-  },
   greeting: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#15803D',
     marginBottom: 4,
   },
   locationContainer: {
@@ -764,109 +765,10 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginBottom: 30,
   },
-  banner: {
-    backgroundColor: '#1E3A8A',
-    borderRadius: 16,
-    padding: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 200, // fixed height so all banners are uniform
-  },
-  bannerLeft: {
-    flex: 1,
-    justifyContent: 'center', // vertically center left-side content
-  },
-  bannerGraphic: {
+  packageImage: {
     width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 8,
-  },
-  badgeIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  carIcon: {
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 3,
-  },
-  bannerTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 4,
-  },
-  bannerPrice: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FF4444',
-    marginBottom: 12,
-  },
-  bookButton: {
-    backgroundColor: '#FF4444',
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    borderRadius: 20,
-    alignSelf: 'flex-start',
-  },
-  bookButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  bannerRight: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center', // vertically center right-side content
-  },
-  carIllustration: {
-    alignItems: 'center',
-    position: 'relative',
-  },
-  serviceIcons: {
-    position: 'absolute',
-    top: -20,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    width: 80,
-    justifyContent: 'space-around',
-  },
-  serviceIcon: {
-    width: 24,
-    height: 24,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  carouselDots: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 12,
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#DDD',
-    marginHorizontal: 3,
-  },
-  activeDot: {
-    backgroundColor: '#1E3A8A',
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    height: 200,
+    borderRadius: 16,
   },
   modalBackdrop: {
     flex: 1,
