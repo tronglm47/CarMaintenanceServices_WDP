@@ -202,9 +202,23 @@ export default function LoginScreen() {
                         const role = payload?.role || 'CUSTOMER';
                         if (!access || !refresh) throw new Error(data?.message || 'Đăng nhập thất bại');
                         await login(access, refresh, role);
-                        await requestPushToken();
-                        // Success - no error shown
-                        router.replace('/(tabs)');
+                        
+                        // Only request push token for CUSTOMER role
+                        if (role !== 'TECHNICIAN') {
+                          try {
+                            await requestPushToken();
+                          } catch (err) {
+                            console.warn('⚠️ Failed to register push token:', err);
+                            // Continue anyway
+                          }
+                        }
+                        
+                        // Navigate based on role
+                        if (role === 'TECHNICIAN') {
+                          router.replace('/(technician-tabs)');
+                        } else {
+                          router.replace('/(tabs)');
+                        }
                       } catch (e: any) {
                         // Only show user-friendly error in Alert, not the axios error
                         const errorMsg = e?.response?.data?.message || e?.message || 'Incorrect email or password';

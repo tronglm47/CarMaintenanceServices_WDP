@@ -70,12 +70,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         };
 
         // Listen to Firebase auth state changes
-        const unsubscribe = auth().onAuthStateChanged((firebaseUser: FirebaseAuthTypes.User | null) => {
+        const unsubscribe = auth().onAuthStateChanged(async (firebaseUser: FirebaseAuthTypes.User | null) => {
             console.log('🔥 Firebase auth state changed. User:', firebaseUser?.email || 'none');
             setUser(firebaseUser);
+            
             if (!firebaseUser) {
-                // Firebase user signed out, clear local auth state
-                console.log('🚪 Firebase user signed out, clearing auth state');
+                // Check if we have stored tokens (email login)
+                const storedAccessToken = await AsyncStorage.getItem('accessToken');
+                const storedRefreshToken = await AsyncStorage.getItem('refreshToken');
+                
+                if (storedAccessToken && storedRefreshToken) {
+                    // User logged in via email, keep auth state
+                    console.log('✅ Email login detected, preserving auth state');
+                    return;
+                }
+                
+                // No tokens found, clear auth state
+                console.log('🚪 No tokens found, clearing auth state');
                 setIsAuthenticated(false);
                 setAccessToken(null);
                 setRefreshToken(null);
@@ -109,30 +120,34 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     const logout = async () => {
         try {
-            // Clean up device token before logout
-            // Import inside function to avoid circular dependency
-            const { removePushToken } = await import('@/apis/notifications.api');
-
-            // Get stored device token if available
-            try {
-                const token = await AsyncStorage.getItem('deviceToken');
-                if (token) {
-                    await removePushToken(token);
+            // Check if we have a device token to clean up (skip for technicians who login via email/password)
+            const deviceToken = await AsyncStorage.getItem('deviceToken');
+            
+            if (deviceToken) {
+                try {
+                    // Import inside function to avoid circular dependency
+                    const { removePushToken } = await import('@/apis/notifications.api');
+                    await removePushToken(deviceToken);
                     await AsyncStorage.removeItem('deviceToken');
                     console.log('✅ Device token unregistered on logout');
+                } catch (error) {
+                    console.warn('⚠️ Could not unregister device token:', error);
+                    // Continue with logout even if token cleanup fails
                 }
-            } catch (error) {
-                console.warn('⚠️ Could not unregister device token:', error);
-                // Continue with logout even if token cleanup fails
+            } else {
+                console.log('ℹ️ No device token to remove');
             }
 
-            // Sign out from Firebase and call backend logout endpoint
-            // Interceptor will automatically add auth header to the logout request
-            try {
-                await firebaseAuthService.signOut();
-            } catch (error) {
-                console.warn('⚠️ Firebase signOut error (continuing with logout):', error);
-                // Continue with logout even if Firebase signOut fails
+            // Sign out from Firebase (only for phone auth users)
+            // Check if user has Firebase authentication
+            if (user) {
+                try {
+                    await firebaseAuthService.signOut();
+                    console.log('✅ Firebase sign out successful');
+                } catch (error) {
+                    console.warn('⚠️ Firebase signOut error (continuing with logout):', error);
+                    // Continue with logout even if Firebase signOut fails
+                }
             }
 
             // Clear ALL persisted data (including chatConversationId, tokens, etc.)
@@ -140,7 +155,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 await AsyncStorage.clear();
             } catch (e) {
                 // Fallback to explicit keys if clear fails
-                await AsyncStorage.multiRemove(['accessToken', 'refreshToken', 'userRole', 'chatConversationId']);
+                await AsyncStorage.multiRemove(['accessToken', 'refreshToken', 'userRole', 'chatConversationId', 'deviceToken']);
             }
 
             // Clear state

@@ -49,32 +49,43 @@ export default function RootLayout() {
 }
 
 function AppNavigator({ colorScheme }: { colorScheme: ColorSchemeName }) {
-  const { isLoading: authLoading, isAuthenticated } = useAuth();
+  const { isLoading: authLoading, isAuthenticated, userRole } = useAuth();
   const router = useRouter();
   const [hasInitialized, setHasInitialized] = useState(false);
 
   useEffect(() => {
     // Only navigate once when auth loading is complete
     if (!authLoading && !hasInitialized) {
-      setHasInitialized(true);
       console.log('✅ Auth loading completed');
       console.log('🔐 User authenticated:', isAuthenticated);
-      const targetRoute = isAuthenticated ? '/(tabs)' : '/login';
-      console.log('📍 Navigating to:', targetRoute);
-
-      // Navigate to the correct route using router hook
-      // small safety: replace navigation after a microtask so root has time to settle
-      setTimeout(() => router.replace(targetRoute), 0);
+      console.log('👤 User role:', userRole);
+      
+      // Mark as initialized immediately to prevent multiple runs
+      setHasInitialized(true);
+      
+      // Add small delay to ensure all APIs are loaded
+      const timer = setTimeout(() => {
+        // Navigate to the correct route
+        if (!isAuthenticated) {
+          console.log('📍 Navigating to: /login');
+          router.replace('/login');
+        } else if (userRole === 'TECHNICIAN') {
+          console.log('📍 Navigating to: /(technician-tabs)');
+          router.replace('/(technician-tabs)' as any);
+        } else {
+          console.log('📍 Navigating to: /(tabs)');
+          router.replace('/(tabs)');
+        }
+      }, 300); // 300ms delay to load APIs
+      
+      return () => clearTimeout(timer);
     }
-  }, [authLoading, hasInitialized, isAuthenticated]);
+  }, [authLoading, hasInitialized]);
 
-  // Show splash screen while auth is loading
-  if (authLoading) {
-    console.log('⏳ Auth is loading, showing splash screen...');
+  // Show splash screen while auth is loading or not yet initialized
+  if (authLoading || !hasInitialized) {
     return <SplashScreenComponent />;
   }
-
-  console.log('🎯 Rendering main navigation. isAuthenticated:', isAuthenticated);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -90,6 +101,8 @@ function AppNavigator({ colorScheme }: { colorScheme: ColorSchemeName }) {
           <Stack.Screen name="booking-success" options={{ headerShown: false }} />
           <Stack.Screen name="tracking" options={{ headerShown: false }} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="(technician-tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="service-record-detail" options={{ headerShown: false }} />
           <Stack.Screen name="chat" options={{ headerShown: false }} />
           <Stack.Screen name="book-appointment" options={{ headerShown: false }} />
           <Stack.Screen name="vehicle-details" options={{ headerShown: false }} />

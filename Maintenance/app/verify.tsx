@@ -103,7 +103,7 @@ export default function VerifyScreen() {
     const otpString = otp.join('');
 
     if (otpString.length !== 6) {
-      Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ 6 số OTP');
+      Alert.alert('Error', 'Please enter all 6 OTP digits');
       return;
     }
 
@@ -120,9 +120,18 @@ export default function VerifyScreen() {
 
         if (backendResult.success && backendResult.data) {
           await login(backendResult.data.accessToken, backendResult.data.refreshToken, backendResult.data.role);
-          await requestPushToken();
+          
+          // Only request push token for non-TECHNICIAN roles
+          if (backendResult.data.role !== 'TECHNICIAN') {
+            try {
+              await requestPushToken();
+            } catch (err) {
+              console.warn('⚠️ Failed to register push token:', err);
+            }
+          }
+          
           console.log('1112')
-          toast.success('Đăng nhập thành công! Chào mừng bạn đến với Car Maintenance Services');
+          toast.success('Login successful! Welcome to Car Maintenance Services');
 
           setTimeout(() => router.replace('/(tabs)'), 1500);
           return;
@@ -136,32 +145,38 @@ export default function VerifyScreen() {
         // Store authentication tokens using auth context
         await login(result.data.accessToken, result.data.refreshToken, result.data.role);
 
-        // Register device token for push notifications
-        console.log('📱 Registering device token after login...');
-        // Debug: ensure tokens are persisted before registering device token
-        try {
-          const a = await AsyncStorage.getItem('accessToken');
-          const r = await AsyncStorage.getItem('refreshToken');
-          console.log('DEBUG tokens after login (before push):', { hasAccess: !!a, hasRefresh: !!r });
-        } catch (e) {
-          console.error('Failed to read tokens from AsyncStorage before push registration', e);
+        // Register device token for push notifications (only for non-TECHNICIAN roles)
+        if (result.data.role !== 'TECHNICIAN') {
+          console.log('📱 Registering device token after login...');
+          // Debug: ensure tokens are persisted before registering device token
+          try {
+            const a = await AsyncStorage.getItem('accessToken');
+            const r = await AsyncStorage.getItem('refreshToken');
+            console.log('DEBUG tokens after login (before push):', { hasAccess: !!a, hasRefresh: !!r });
+          } catch (e) {
+            console.error('Failed to read tokens from AsyncStorage before push registration', e);
+          }
+
+          try {
+            await requestPushToken();
+          } catch (err) {
+            console.warn('⚠️ Failed to register push token:', err);
+          }
         }
 
-        await requestPushToken();
-
         // Show success toast
-        toast.success('Đăng nhập thành công! Chào mừng bạn đến với Car Maintenance Services');
+        toast.success('Login successful! Welcome to Car Maintenance Services');
 
         // Navigate to main app (tabs) after a short delay to show toast
         setTimeout(() => {
           router.replace('/(tabs)');
         }, 1500);
       } else {
-        Alert.alert('Lỗi', result.message);
+        Alert.alert('Error', result.message);
       }
 
     } catch (error) {
-      Alert.alert('Lỗi', error instanceof Error ? error.message : 'Mã OTP không đúng. Vui lòng thử lại.');
+      Alert.alert('Error', error instanceof Error ? error.message : 'Invalid OTP code. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -179,12 +194,12 @@ export default function VerifyScreen() {
         setTimeLeft(60);
         setOtp(['', '', '', '', '', '']);
 
-        toast('Mã OTP mới đã được gửi. Vui lòng kiểm tra tin nhắn');
+        toast('New OTP code has been sent. Please check your messages');
       } else {
-        Alert.alert('Lỗi', result.message);
+        Alert.alert('Error', result.message);
       }
     } catch (error) {
-      Alert.alert('Lỗi', error instanceof Error ? error.message : 'Không thể gửi lại OTP. Vui lòng thử lại.');
+      Alert.alert('Error', error instanceof Error ? error.message : 'Unable to resend OTP. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -215,18 +230,18 @@ export default function VerifyScreen() {
             </TouchableOpacity>
 
             <View style={styles.logoContainer}>
-              <Ionicons name="shield-checkmark" size={50} color="#4A90E2" />
+              <Ionicons name="shield-checkmark" size={50} color="#15803D" />
             </View>
-            <Text style={styles.title}>Xác thực OTP</Text>
+            <Text style={styles.title}>OTP Verification</Text>
             <Text style={styles.subtitle}>
-              Chúng tôi đã gửi mã xác thực đến số{'\n'}
+              We have sent the verification code to{'\n'}
               <Text style={styles.phoneNumber}> {formatPhoneNumber(phoneNumber as string)}</Text>
             </Text>
           </View>
 
           {/* OTP Input */}
           <View style={styles.otpContainer}>
-            <Text style={styles.otpLabel}>Nhập mã OTP</Text>
+            <Text style={styles.otpLabel}>Enter OTP Code</Text>
             <View style={styles.otpInputs}>
               {otp.map((digit, index) => (
                 <TextInput
@@ -259,7 +274,7 @@ export default function VerifyScreen() {
               {isLoading ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.verifyButtonText}>Xác thực</Text>
+                <Text style={styles.verifyButtonText}>Verify</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -267,7 +282,7 @@ export default function VerifyScreen() {
           {/* Resend OTP */}
           <View style={styles.resendContainer}>
             <Text style={styles.resendText}>
-              Không nhận được mã?{' '}
+              Didn't receive the code?{' '}
             </Text>
             <TouchableOpacity
               onPress={handleResendOTP}
@@ -277,7 +292,7 @@ export default function VerifyScreen() {
                 styles.resendButton,
                 (timeLeft > 0 || isLoading) && styles.resendButtonDisabled
               ]}>
-                {timeLeft > 0 ? `Gửi lại (${timeLeft}s)` : 'Gửi lại'}
+                {timeLeft > 0 ? `Resend (${timeLeft}s)` : 'Resend'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -313,7 +328,7 @@ const styles = StyleSheet.create({
   logoContainer: {
     width: 80,
     height: 80,
-    backgroundColor: '#F0F8FF',
+    backgroundColor: '#DCFCE7',
     borderRadius: 40,
     justifyContent: 'center',
     alignItems: 'center',
@@ -334,7 +349,7 @@ const styles = StyleSheet.create({
   },
   phoneNumber: {
     fontWeight: '600',
-    color: '#4A90E2',
+    color: '#15803D',
   },
   otpContainer: {
     marginBottom: 32,
@@ -364,11 +379,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9F9F9',
   },
   otpInputFilled: {
-    borderColor: '#4A90E2',
-    backgroundColor: '#F0F8FF',
+    borderColor: '#15803D',
+    backgroundColor: '#DCFCE7',
   },
   verifyButton: {
-    backgroundColor: '#4A90E2',
+    backgroundColor: '#15803D',
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
@@ -397,7 +412,7 @@ const styles = StyleSheet.create({
   },
   resendButton: {
     fontSize: 14,
-    color: '#4A90E2',
+    color: '#15803D',
     fontWeight: '600',
   },
   resendButtonDisabled: {

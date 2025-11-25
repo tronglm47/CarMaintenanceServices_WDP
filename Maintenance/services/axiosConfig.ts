@@ -86,23 +86,19 @@ class AxiosService {
     private async responseErrorHandler(error: AxiosError) {
         const originalRequest = error.config as CustomAxiosRequestConfig;
 
-        // Add more detailed logging to trace which request caused the 401/refresh flow
-        try {
-            console.error('Axios response error:', {
-                url: originalRequest?.url,
-                method: originalRequest?.method,
-                status: error.response?.status,
-                data: error.response?.data,
-                message: error.message,
-            });
-        } catch (logErr) {
-            console.error('Failed to log axios error details', logErr);
-        }
-
         // Handle 401 Unauthorized - Token expired or invalid
         const skipAuth = (originalRequest?.headers as any)?.['X-Skip-Auth'] === 'true';
         if (error.response?.status === 401 && !originalRequest._retry && !skipAuth) {
             originalRequest._retry = true;
+
+            // Check if we have a refresh token before attempting refresh
+            const hasRefreshToken = await AsyncStorage.getItem('refreshToken');
+            
+            // Only attempt refresh if we have a refresh token
+            if (!hasRefreshToken) {
+                // No refresh token means user is not logged in - silently reject
+                return Promise.reject(error);
+            }
 
             if (!this.isRefreshing) {
                 this.isRefreshing = true;
@@ -127,7 +123,10 @@ class AxiosService {
                         throw error;
                     }
                 } catch (refreshError) {
-                    console.error('Token refresh failed:', refreshError);
+                    // Only log if it's not a "no refresh token" error
+                    if (!(refreshError instanceof Error && refreshError.message.includes('No refresh token'))) {
+                        console.error('Token refresh failed:', refreshError);
+                    }
                     await this.clearAuth();
                     throw error;
                 } finally {
@@ -158,7 +157,8 @@ class AxiosService {
             const refreshToken = await AsyncStorage.getItem('refreshToken');
 
             if (!refreshToken) {
-                throw new Error('No refresh token available');
+                // Silently return null instead of throwing error
+                return null;
             }
 
             const baseURL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://ev-maintenance-9bd58b96744e.herokuapp.com/api';
@@ -202,7 +202,10 @@ class AxiosService {
 
             return null;
         } catch (error) {
-            console.error('Error refreshing token:', error);
+            // Only log if it's not a "no refresh token" error
+            if (!(error instanceof Error && error.message.includes('No refresh token'))) {
+                console.error('Error refreshing token:', error);
+            }
             return null;
         }
     }

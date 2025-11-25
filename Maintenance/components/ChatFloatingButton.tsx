@@ -3,6 +3,7 @@ import { TouchableOpacity, StyleSheet, View, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, usePathname } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface ChatFloatingButtonProps {
   conversationId?: string | null;
@@ -11,9 +12,11 @@ interface ChatFloatingButtonProps {
 const ChatFloatingButton: React.FC<ChatFloatingButtonProps> = ({ conversationId }) => {
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
+  const { userRole } = useAuth();
   const isHomeScreen = pathname === '/(tabs)' || pathname === '/(tabs)/index' || pathname === '/';
 
-  if (!isHomeScreen) return null;
+  // Only show for CUSTOMER role on home screen
+  if (!isHomeScreen || userRole === 'TECHNICIAN') return null;
 
   const onPress = () => {
     router.push({
