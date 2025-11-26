@@ -300,6 +300,35 @@ export default function ServiceRecordDetailScreen() {
     return `${part.name || 'Auto Part'}${priceStr}`;
   };
 
+  // Get category from selected failed component
+  const getSelectedFailedPartCategory = (): string | undefined => {
+    if (!defectForm.failedPartId) return undefined;
+    
+    const failedVehiclePart = vehicleParts.find(vp => vp._id === defectForm.failedPartId);
+    if (!failedVehiclePart) return undefined;
+    
+    const autopartId = failedVehiclePart.autopart_id;
+    if (typeof autopartId === 'string') {
+      const autoPart = autoParts.find(ap => ap._id === autopartId);
+      return autoPart?.category;
+    } else {
+      return autopartId?.category;
+    }
+  };
+
+  // Filter replacement parts by category of failed component
+  const getFilteredReplacementParts = (): AutoPart[] => {
+    const selectedCategory = getSelectedFailedPartCategory();
+    
+    if (!selectedCategory) {
+      // If no failed component selected or no category, show all parts
+      return autoParts;
+    }
+    
+    // Filter parts with matching category
+    return autoParts.filter(part => part.category === selectedCategory);
+  };
+
   // Update service record status
   const updateRecordStatus = async (newStatus: string) => {
     try {
@@ -508,6 +537,16 @@ export default function ServiceRecordDetailScreen() {
 
   const handleChecklistStatusChange = async (checklistId: string, status: ChecklistStatus) => {
     if (!checklistId || !status || statusUpdatingId) return;
+    
+    // Find the current checklist
+    const currentChecklist = recordChecklists.find(c => c._id === checklistId);
+    
+    // Prevent changing from completed status
+    if (currentChecklist?.status === 'completed' && status !== 'completed') {
+      toast.error('Cannot change status from completed');
+      return;
+    }
+    
     setStatusUpdatingId(`${checklistId}-${status}`);
     try {
       await api.recordChecklists.updateStatus(checklistId, { status });
@@ -1100,15 +1139,18 @@ export default function ServiceRecordDetailScreen() {
                           {CHECKLIST_STATUSES.map((status) => {
                             const isActive = status === checklistStatus;
                             const isBusy = statusUpdatingId === `${checklist._id}-${status}`;
+                            const isCompleted = checklistStatus === 'completed';
+                            const isDisabled = isBusy || (isCompleted && status !== 'completed');
                             return (
                               <TouchableOpacity
                                 key={status}
                                 style={[
                                   styles.statusChip,
                                   isActive && styles.statusChipActive,
+                                  isDisabled && !isActive && styles.statusChipDisabled,
                                 ]}
                                 onPress={() => handleChecklistStatusChange(checklist._id, status)}
-                                disabled={isBusy}
+                                disabled={isDisabled}
                               >
                                 {isBusy ? (
                                   <ActivityIndicator size="small" color={isActive ? '#FFFFFF' : '#15803D'} />
@@ -1117,6 +1159,7 @@ export default function ServiceRecordDetailScreen() {
                                     style={[
                                       styles.statusChipText,
                                       isActive && styles.statusChipTextActive,
+                                      isDisabled && !isActive && styles.statusChipTextDisabled,
                                     ]}
                                   >
                                     {status.replace('-', ' ')}
@@ -1135,11 +1178,18 @@ export default function ServiceRecordDetailScreen() {
                         </View>
                         {userRole === 'TECHNICIAN' && (
                           <TouchableOpacity
-                            style={styles.addDefectButton}
+                            style={[
+                              styles.addDefectButton,
+                              checklistStatus === 'completed' && styles.addDefectButtonDisabled
+                            ]}
                             onPress={() => openDefectModal(checklist)}
+                            disabled={checklistStatus === 'completed'}
                           >
-                            <Ionicons name="add-circle" size={18} color="#FFFFFF" />
-                            <Text style={styles.addDefectButtonText}>Add</Text>
+                            <Ionicons name="add-circle" size={18} color={checklistStatus === 'completed' ? '#9CA3AF' : '#FFFFFF'} />
+                            <Text style={[
+                              styles.addDefectButtonText,
+                              checklistStatus === 'completed' && styles.addDefectButtonTextDisabled
+                            ]}>Add</Text>
                           </TouchableOpacity>
                         )}
                       </View>
@@ -1362,12 +1412,16 @@ export default function ServiceRecordDetailScreen() {
                           <TouchableOpacity
                             key={id}
                             style={[styles.selectorPill, isSelected && styles.selectorPillActive]}
-                            onPress={() =>
+                            onPress={() => {
+                              // Reset replacement part selection when failed component changes
                               setDefectForm((prev) => ({
                                 ...prev,
                                 failedPartId: id,
-                              }))
-                            }
+                                replacementPartId: '', // Reset replacement part
+                                suggestedPartId: '',
+                              }));
+                              setSelectedPartInfo(null);
+                            }}
                           >
                             <Text
                               style={[
@@ -1384,32 +1438,64 @@ export default function ServiceRecordDetailScreen() {
                   )}
 
                 <Text style={[styles.modalLabel, { marginTop: 16 }]}>Replacement part</Text>
-                {autoParts.length === 0 ? (
-                  <Text style={styles.emptyText}>No auto parts available.</Text>
-                ) : (
-                  <View style={styles.selectorWrapper}>
-                    {autoParts.map((part) => {
-                      const id = part._id;
-                      const isSelected = defectForm.replacementPartId === id;
-                      return (
-                        <TouchableOpacity
-                          key={id}
-                          style={[styles.selectorPill, isSelected && styles.selectorPillActive]}
-                          onPress={() => handleSelectReplacementPart(id)}
-                        >
-                          <Text
-                            style={[
-                              styles.selectorText,
-                              isSelected && styles.selectorTextActive,
-                            ]}
-                          >
-                            {getAutoPartDisplay(part)}
+                {(() => {
+                  const filteredParts = getFilteredReplacementParts();
+                  const selectedCategory = getSelectedFailedPartCategory();
+                  
+                  if (!defectForm.failedPartId) {
+                    return (
+                      <View style={{ padding: 12, backgroundColor: '#FEF3C7', borderRadius: 8, marginBottom: 12 }}>
+                        <Text style={{ fontSize: 13, color: '#92400E', textAlign: 'center' }}>
+                          Please select a failed component first
+                        </Text>
+                      </View>
+                    );
+                  }
+                  
+                  if (filteredParts.length === 0) {
+                    return (
+                      <View style={{ padding: 12, backgroundColor: '#FEE2E2', borderRadius: 8, marginBottom: 12 }}>
+                        <Text style={{ fontSize: 13, color: '#991B1B', textAlign: 'center' }}>
+                          No replacement parts available{selectedCategory ? ` for category "${selectedCategory}"` : ''}
+                        </Text>
+                      </View>
+                    );
+                  }
+                  
+                  return (
+                    <>
+                      {selectedCategory && (
+                        <View style={{ padding: 8, backgroundColor: '#DCFCE7', borderRadius: 6, marginBottom: 8 }}>
+                          <Text style={{ fontSize: 12, color: '#15803D', textAlign: 'center' }}>
+                            Showing parts in category: {selectedCategory}
                           </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                )}
+                        </View>
+                      )}
+                      <View style={styles.selectorWrapper}>
+                        {filteredParts.map((part) => {
+                          const id = part._id;
+                          const isSelected = defectForm.replacementPartId === id;
+                          return (
+                            <TouchableOpacity
+                              key={id}
+                              style={[styles.selectorPill, isSelected && styles.selectorPillActive]}
+                              onPress={() => handleSelectReplacementPart(id)}
+                            >
+                              <Text
+                                style={[
+                                  styles.selectorText,
+                                  isSelected && styles.selectorTextActive,
+                                ]}
+                              >
+                                {getAutoPartDisplay(part)}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </>
+                  );
+                })()}
 
                 <Text style={[styles.modalLabel, { marginTop: 16 }]}>Failure type</Text>
                 <View style={styles.selectorWrapper}>
@@ -1773,6 +1859,14 @@ const styles = StyleSheet.create({
   statusChipTextActive: {
     color: '#FFFFFF',
   },
+  statusChipDisabled: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#E2E8F0',
+    opacity: 0.5,
+  },
+  statusChipTextDisabled: {
+    color: '#94A3B8',
+  },
   defectHeader: {
     marginTop: 16,
     paddingTop: 16,
@@ -1800,6 +1894,14 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 13,
+  },
+  addDefectButtonDisabled: {
+    backgroundColor: '#E2E8F0',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  addDefectButtonTextDisabled: {
+    color: '#9CA3AF',
   },
   defectCard: {
     marginTop: 12,
